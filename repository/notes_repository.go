@@ -16,7 +16,6 @@ func NewNotesRepository(db *sql.DB) *NotesRepository {
 	return &NotesRepository{db: db}
 }
 
-// CreateUser создаёт нового пользователя
 func (r *NotesRepository) CreateUser(username, password string) (*models.User, error) {
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
@@ -35,7 +34,6 @@ func (r *NotesRepository) CreateUser(username, password string) (*models.User, e
 	return &user, nil
 }
 
-// GetUserByUsername получает пользователя по имени
 func (r *NotesRepository) GetUserByUsername(username string) (*models.User, error) {
 	var user models.User
 	err := r.db.QueryRow(`

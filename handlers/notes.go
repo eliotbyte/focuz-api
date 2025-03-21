@@ -20,7 +20,6 @@ func NewNotesHandler(repo *repository.NotesRepository) *NotesHandler {
 	return &NotesHandler{repo: repo}
 }
 
-// AuthMiddleware для проверки JWT
 func AuthMiddleware(secret string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
@@ -68,7 +67,6 @@ func AuthMiddleware(secret string) gin.HandlerFunc {
 	}
 }
 
-// Register регистрирует нового пользователя
 func (h *NotesHandler) Register(c *gin.Context) {
 	var req struct {
 		Username string `json:"username"`
@@ -93,7 +91,6 @@ func (h *NotesHandler) Register(c *gin.Context) {
 	c.JSON(http.StatusCreated, user)
 }
 
-// Login аутентифицирует пользователя и возвращает JWT
 func (h *NotesHandler) Login(c *gin.Context) {
 	var req struct {
 		Username string `json:"username"`
@@ -115,10 +112,9 @@ func (h *NotesHandler) Login(c *gin.Context) {
 		return
 	}
 
-	// Генерация JWT
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"userId": user.ID,
-		"exp":    time.Now().Add(time.Hour * 24).Unix(), // Токен действителен 24 часа
+		"exp":    time.Now().Add(time.Hour * 24).Unix(),
 	})
 	tokenString, err := token.SignedString([]byte(c.MustGet("jwtSecret").(string)))
 	if err != nil {

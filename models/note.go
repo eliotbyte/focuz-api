@@ -12,7 +12,7 @@ type Note struct {
 	Date       time.Time   `json:"date"`
 	Parent     *ParentNote `json:"parent"`
 	ReplyCount int         `json:"replyCount"`
-	IsDeleted  bool        `json:"-"` // Не возвращаем в JSON
+	IsDeleted  bool        `json:"-"`
 }
 
 type ParentNote struct {

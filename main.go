@@ -16,19 +16,18 @@ import (
 )
 
 func main() {
-	// Получение DATABASE_URL из окружения
+	// Get environment variables
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
 		log.Fatal("DATABASE_URL is not set")
 	}
 
-	// Секретный ключ для JWT
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
 		jwtSecret = "mysecretkey"
 	}
 
-	// Повторные попытки подключения к базе данных
+	// Retry database connection
 	var db *sql.DB
 	var err error
 	for i := 0; i < 10; i++ {
@@ -39,53 +38,51 @@ func main() {
 				break
 			}
 		}
-		log.Printf("Failed to connect to database: %v, retrying in 2 seconds...", err)
+		log.Printf("DB connection failed: %v, retrying in 2s...", err)
 		time.Sleep(2 * time.Second)
 	}
 	if err != nil {
-		log.Fatal("Failed to connect to database after retries:", err)
+		log.Fatal("Could not connect to database:", err)
 	}
 	defer db.Close()
 
-	// Применение миграций
+	// Run migrations
 	driver, err := postgres.WithInstance(db, &postgres.Config{})
 	if err != nil {
-		log.Fatal("Failed to create migration driver:", err)
+		log.Fatal("Migration driver error:", err)
 	}
-	m, err := migrate.NewWithDatabaseInstance(
-		"file://migrations",
-		"postgres", driver)
+	m, err := migrate.NewWithDatabaseInstance("file://migrations", "postgres", driver)
 	if err != nil {
-		log.Fatal("Failed to initialize migrations:", err)
+		log.Fatal("Migration init error:", err)
 	}
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
-		log.Fatal("Failed to apply migrations:", err)
+		log.Fatal("Migration failed:", err)
 	}
 
-	// Инициализация репозитория и хэндлеров
+	// Setup repository and handlers
 	repo := repository.NewNotesRepository(db)
 	handler := handlers.NewNotesHandler(repo)
 
-	// Настройка Gin
+	// Setup Gin routes
 	r := gin.Default()
 
-	// Публичные маршруты (без JWT)
+	// Public routes
 	r.POST("/register", handler.Register)
 	r.POST("/login", func(c *gin.Context) {
-		c.Set("jwtSecret", jwtSecret) // Передаём секрет в контекст для Login
+		c.Set("jwtSecret", jwtSecret)
 		handler.Login(c)
 	})
 
-	// Защищённые маршруты (с JWT)
-	authGroup := r.Group("/", handlers.AuthMiddleware(jwtSecret))
+	// Protected routes
+	auth := r.Group("/", handlers.AuthMiddleware(jwtSecret))
 	{
-		authGroup.POST("/notes", handler.CreateNote)
-		authGroup.PATCH("/notes/:id/delete", handler.DeleteNote)
-		authGroup.PATCH("/notes/:id/restore", handler.RestoreNote)
-		authGroup.GET("/notes/:id", handler.GetNote)
-		authGroup.GET("/notes", handler.GetNotes)
+		auth.POST("/notes", handler.CreateNote)
+		auth.PATCH("/notes/:id/delete", handler.DeleteNote)
+		auth.PATCH("/notes/:id/restore", handler.RestoreNote)
+		auth.GET("/notes/:id", handler.GetNote)
+		auth.GET("/notes", handler.GetNotes)
 	}
 
-	// Запуск сервера
+	// Start server
 	r.Run(":8080")
 }
