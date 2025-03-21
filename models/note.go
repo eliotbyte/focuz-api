@@ -4,6 +4,7 @@ import "time"
 
 type Note struct {
 	ID         int         `json:"id"`
+	UserID     int         `json:"userId"`
 	Text       string      `json:"text"`
 	Tags       []string    `json:"tags"`
 	CreatedAt  time.Time   `json:"createdAt"`

@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"focuz-api/models"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 type NotesRepository struct {
@@ -14,14 +16,48 @@ func NewNotesRepository(db *sql.DB) *NotesRepository {
 	return &NotesRepository{db: db}
 }
 
-func (r *NotesRepository) CreateNote(text string, tags []string, parentID *int, date *string) (*models.Note, error) {
+// CreateUser создаёт нового пользователя
+func (r *NotesRepository) CreateUser(username, password string) (*models.User, error) {
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, err
+	}
+
+	var user models.User
+	err = r.db.QueryRow(`
+		INSERT INTO users (username, password_hash)
+		VALUES ($1, $2)
+		RETURNING id, username, created_at`,
+		username, string(passwordHash)).Scan(&user.ID, &user.Username, &user.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+// GetUserByUsername получает пользователя по имени
+func (r *NotesRepository) GetUserByUsername(username string) (*models.User, error) {
+	var user models.User
+	err := r.db.QueryRow(`
+		SELECT id, username, password_hash, created_at
+		FROM users
+		WHERE username = $1`, username).Scan(&user.ID, &user.Username, &user.PasswordHash, &user.CreatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+func (r *NotesRepository) CreateNote(userID int, text string, tags []string, parentID *int, date *string) (*models.Note, error) {
 	tx, err := r.db.Begin()
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
 
-	// Вставка заметки
 	var noteDate time.Time
 	if date != nil {
 		noteDate, _ = time.Parse(time.RFC3339, *date)
@@ -30,15 +66,14 @@ func (r *NotesRepository) CreateNote(text string, tags []string, parentID *int, 
 	}
 	var noteID int
 	err = tx.QueryRow(`
-		INSERT INTO note (text, created_at, modified_at, date, parent_id)
-		VALUES ($1, NOW(), NOW(), $2, $3)
+		INSERT INTO note (user_id, text, created_at, modified_at, date, parent_id)
+		VALUES ($1, $2, NOW(), NOW(), $3, $4)
 		RETURNING id`,
-		text, noteDate, parentID).Scan(&noteID)
+		userID, text, noteDate, parentID).Scan(&noteID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Обработка тегов
 	for _, tagName := range tags {
 		var tagID int
 		err := tx.QueryRow(`
@@ -57,7 +92,6 @@ func (r *NotesRepository) CreateNote(text string, tags []string, parentID *int, 
 		}
 	}
 
-	// Подсчёт reply_count для родителя
 	if parentID != nil {
 		_, err = tx.Exec(`
 			UPDATE note SET reply_count = reply_count + 1
@@ -86,13 +120,13 @@ func (r *NotesRepository) GetNoteByID(id int) (*models.Note, error) {
 	var parentID sql.NullInt64
 	var parentText sql.NullString
 	err := r.db.QueryRow(`
-		SELECT n.id, n.text, n.created_at, n.modified_at, n.date, n.parent_id,
+		SELECT n.id, n.user_id, n.text, n.created_at, n.modified_at, n.date, n.parent_id,
 		       n.reply_count, n.is_deleted,
 		       p.text AS parent_text
 		FROM note n
 		LEFT JOIN note p ON n.parent_id = p.id
 		WHERE n.id = $1`, id).Scan(
-		&note.ID, &note.Text, &note.CreatedAt, &note.ModifiedAt, &note.Date,
+		&note.ID, &note.UserID, &note.Text, &note.CreatedAt, &note.ModifiedAt, &note.Date,
 		&parentID, &note.ReplyCount, &note.IsDeleted, &parentText)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -127,14 +161,14 @@ func (r *NotesRepository) GetNoteByID(id int) (*models.Note, error) {
 	return &note, nil
 }
 
-func (r *NotesRepository) GetNotes(page, pageSize int) ([]*models.Note, int, error) {
+func (r *NotesRepository) GetNotes(userID, page, pageSize int) ([]*models.Note, int, error) {
 	offset := (page - 1) * pageSize
 	rows, err := r.db.Query(`
-		SELECT id, text, created_at, modified_at, date, parent_id, reply_count
+		SELECT id, user_id, text, created_at, modified_at, date, parent_id, reply_count
 		FROM note
-		WHERE is_deleted = FALSE
+		WHERE is_deleted = FALSE AND user_id = $1
 		ORDER BY created_at DESC
-		LIMIT $1 OFFSET $2`, pageSize, offset)
+		LIMIT $2 OFFSET $3`, userID, pageSize, offset)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -144,7 +178,7 @@ func (r *NotesRepository) GetNotes(page, pageSize int) ([]*models.Note, int, err
 	for rows.Next() {
 		var note models.Note
 		var parentID sql.NullInt64
-		if err := rows.Scan(&note.ID, &note.Text, &note.CreatedAt, &note.ModifiedAt,
+		if err := rows.Scan(&note.ID, &note.UserID, &note.Text, &note.CreatedAt, &note.ModifiedAt,
 			&note.Date, &parentID, &note.ReplyCount); err != nil {
 			return nil, 0, err
 		}
@@ -179,7 +213,7 @@ func (r *NotesRepository) GetNotes(page, pageSize int) ([]*models.Note, int, err
 	}
 
 	var total int
-	err = r.db.QueryRow(`SELECT COUNT(*) FROM note WHERE is_deleted = FALSE`).Scan(&total)
+	err = r.db.QueryRow(`SELECT COUNT(*) FROM note WHERE is_deleted = FALSE AND user_id = $1`, userID).Scan(&total)
 	if err != nil {
 		return nil, 0, err
 	}

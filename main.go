@@ -22,13 +22,19 @@ func main() {
 		log.Fatal("DATABASE_URL is not set")
 	}
 
+	// Секретный ключ для JWT
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		jwtSecret = "mysecretkey"
+	}
+
 	// Повторные попытки подключения к базе данных
 	var db *sql.DB
 	var err error
-	for i := 0; i < 10; i++ { // Пробуем 10 раз с интервалом 2 секунды
+	for i := 0; i < 10; i++ {
 		db, err = sql.Open("postgres", dbURL)
 		if err == nil {
-			err = db.Ping() // Проверяем доступность базы
+			err = db.Ping()
 			if err == nil {
 				break
 			}
@@ -62,11 +68,23 @@ func main() {
 
 	// Настройка Gin
 	r := gin.Default()
-	r.POST("/notes", handler.CreateNote)
-	r.PATCH("/notes/:id/delete", handler.DeleteNote)
-	r.PATCH("/notes/:id/restore", handler.RestoreNote)
-	r.GET("/notes/:id", handler.GetNote)
-	r.GET("/notes", handler.GetNotes)
+
+	// Публичные маршруты (без JWT)
+	r.POST("/register", handler.Register)
+	r.POST("/login", func(c *gin.Context) {
+		c.Set("jwtSecret", jwtSecret) // Передаём секрет в контекст для Login
+		handler.Login(c)
+	})
+
+	// Защищённые маршруты (с JWT)
+	authGroup := r.Group("/", handlers.AuthMiddleware(jwtSecret))
+	{
+		authGroup.POST("/notes", handler.CreateNote)
+		authGroup.PATCH("/notes/:id/delete", handler.DeleteNote)
+		authGroup.PATCH("/notes/:id/restore", handler.RestoreNote)
+		authGroup.GET("/notes/:id", handler.GetNote)
+		authGroup.GET("/notes", handler.GetNotes)
+	}
 
 	// Запуск сервера
 	r.Run(":8080")
