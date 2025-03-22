@@ -48,8 +48,7 @@ func (h *TopicsHandler) UpdateTopic(c *gin.Context) {
 		return
 	}
 	var req struct {
-		Name   string `json:"name"`
-		TypeID int    `json:"typeId"`
+		Name string `json:"name"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -66,7 +65,7 @@ func (h *TopicsHandler) UpdateTopic(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "No permission to update topic"})
 		return
 	}
-	err = h.topicsRepo.UpdateTopic(id, req.Name, req.TypeID)
+	err = h.topicsRepo.UpdateTopicName(id, req.Name)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -122,4 +121,28 @@ func (h *TopicsHandler) RestoreTopic(c *gin.Context) {
 		return
 	}
 	c.Status(http.StatusNoContent)
+}
+
+func (h *TopicsHandler) GetTopicsBySpace(c *gin.Context) {
+	spaceID, err := strconv.Atoi(c.Param("spaceId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid space ID"})
+		return
+	}
+	userID := c.GetInt("userId")
+	hasAccess, _, err := h.spacesRepo.UserHasAccessToSpace(userID, spaceID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if !hasAccess {
+		c.JSON(http.StatusForbidden, gin.H{"error": "No access to the space"})
+		return
+	}
+	topics, err := h.topicsRepo.GetTopicsBySpace(spaceID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, topics)
 }

@@ -10,7 +10,8 @@ CREATE TABLE space (
     name VARCHAR(255) NOT NULL,
     owner_id INTEGER REFERENCES users(id),
     is_deleted BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    modified_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE user_to_space (
@@ -34,7 +35,8 @@ CREATE TABLE topic (
     name VARCHAR(255) NOT NULL,
     type_id INTEGER NOT NULL REFERENCES topic_type(id),
     is_deleted BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    modified_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 ALTER TABLE note

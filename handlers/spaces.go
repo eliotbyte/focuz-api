@@ -132,3 +132,55 @@ func (h *SpacesHandler) InviteUser(c *gin.Context) {
 	}
 	c.Status(http.StatusNoContent)
 }
+
+func (h *SpacesHandler) GetAccessibleSpaces(c *gin.Context) {
+	userID := c.GetInt("userId")
+	spaces, err := h.spacesRepo.GetSpacesForUser(userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, spaces)
+}
+
+func (h *SpacesHandler) RemoveUser(c *gin.Context) {
+	spaceID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid space ID"})
+		return
+	}
+	userID := c.GetInt("userId")
+	roleName, err := h.spacesRepo.GetUserRoleInSpace(userID, spaceID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if roleName != "owner" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Guests cannot remove participants"})
+		return
+	}
+	userToRemoveID, err := strconv.Atoi(c.Param("userId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+		return
+	}
+	targetRole, err := h.spacesRepo.GetUserRoleInSpace(userToRemoveID, spaceID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if targetRole == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Participant not found in space"})
+		return
+	}
+	if targetRole == "owner" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Cannot remove the creator"})
+		return
+	}
+	err = h.spacesRepo.RemoveUserFromSpace(userToRemoveID, spaceID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.Status(http.StatusNoContent)
+}

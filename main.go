@@ -75,6 +75,9 @@ func main() {
 
 	auth := r.Group("/", handlers.AuthMiddleware(jwtSecret))
 	{
+		auth.GET("/spaces", spacesHandler.GetAccessibleSpaces)
+		auth.DELETE("/spaces/:id/users/:userId", spacesHandler.RemoveUser)
+
 		auth.POST("/spaces", spacesHandler.CreateSpace)
 		auth.PATCH("/spaces/:id", spacesHandler.UpdateSpace)
 		auth.PATCH("/spaces/:id/delete", spacesHandler.DeleteSpace)
@@ -85,6 +88,7 @@ func main() {
 		auth.PATCH("/topics/:id", topicsHandler.UpdateTopic)
 		auth.PATCH("/topics/:id/delete", topicsHandler.DeleteTopic)
 		auth.PATCH("/topics/:id/restore", topicsHandler.RestoreTopic)
+		auth.GET("/spaces/:spaceId/topics", topicsHandler.GetTopicsBySpace)
 
 		auth.POST("/notes", notesHandler.CreateNote)
 		auth.PATCH("/notes/:id/delete", notesHandler.DeleteNote)
