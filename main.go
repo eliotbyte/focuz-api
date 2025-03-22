@@ -16,7 +16,6 @@ import (
 )
 
 func main() {
-	// Get environment variables
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
 		log.Fatal("DATABASE_URL is not set")
@@ -27,7 +26,6 @@ func main() {
 		jwtSecret = "mysecretkey"
 	}
 
-	// Retry database connection
 	var db *sql.DB
 	var err error
 	for i := 0; i < 10; i++ {
@@ -46,7 +44,6 @@ func main() {
 	}
 	defer db.Close()
 
-	// Run migrations
 	driver, err := postgres.WithInstance(db, &postgres.Config{})
 	if err != nil {
 		log.Fatal("Migration driver error:", err)
@@ -59,30 +56,42 @@ func main() {
 		log.Fatal("Migration failed:", err)
 	}
 
-	// Setup repository and handlers
-	repo := repository.NewNotesRepository(db)
-	handler := handlers.NewNotesHandler(repo)
+	spacesRepo := repository.NewSpacesRepository(db)
+	topicsRepo := repository.NewTopicsRepository(db)
+	notesRepo := repository.NewNotesRepository(db)
+	rolesRepo := repository.NewRolesRepository(db)
 
-	// Setup Gin routes
+	notesHandler := handlers.NewNotesHandler(notesRepo, spacesRepo, topicsRepo)
+	spacesHandler := handlers.NewSpacesHandler(spacesRepo, rolesRepo)
+	topicsHandler := handlers.NewTopicsHandler(topicsRepo, spacesRepo)
+
 	r := gin.Default()
 
-	// Public routes
-	r.POST("/register", handler.Register)
+	r.POST("/register", notesHandler.Register)
 	r.POST("/login", func(c *gin.Context) {
 		c.Set("jwtSecret", jwtSecret)
-		handler.Login(c)
+		notesHandler.Login(c)
 	})
 
-	// Protected routes
 	auth := r.Group("/", handlers.AuthMiddleware(jwtSecret))
 	{
-		auth.POST("/notes", handler.CreateNote)
-		auth.PATCH("/notes/:id/delete", handler.DeleteNote)
-		auth.PATCH("/notes/:id/restore", handler.RestoreNote)
-		auth.GET("/notes/:id", handler.GetNote)
-		auth.GET("/notes", handler.GetNotes)
+		auth.POST("/spaces", spacesHandler.CreateSpace)
+		auth.PATCH("/spaces/:id", spacesHandler.UpdateSpace)
+		auth.PATCH("/spaces/:id/delete", spacesHandler.DeleteSpace)
+		auth.PATCH("/spaces/:id/restore", spacesHandler.RestoreSpace)
+		auth.POST("/spaces/:id/invite", spacesHandler.InviteUser)
+
+		auth.POST("/topics", topicsHandler.CreateTopic)
+		auth.PATCH("/topics/:id", topicsHandler.UpdateTopic)
+		auth.PATCH("/topics/:id/delete", topicsHandler.DeleteTopic)
+		auth.PATCH("/topics/:id/restore", topicsHandler.RestoreTopic)
+
+		auth.POST("/notes", notesHandler.CreateNote)
+		auth.PATCH("/notes/:id/delete", notesHandler.DeleteNote)
+		auth.PATCH("/notes/:id/restore", notesHandler.RestoreNote)
+		auth.GET("/notes/:id", notesHandler.GetNote)
+		auth.GET("/notes", notesHandler.GetNotes)
 	}
 
-	// Start server
 	r.Run(":8080")
 }
