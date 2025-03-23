@@ -28,25 +28,21 @@ func (r *TopicsRepository) CreateTopic(spaceID int, name string, typeID int) (*m
 
 func (r *TopicsRepository) GetTopicByID(id int) (*models.Topic, error) {
 	var t models.Topic
-	var typeName string
 	err := r.db.QueryRow(`
 		SELECT tp.id,
 		       tp.space_id,
 		       tp.name,
 		       tp.type_id,
-		       tt.name as type_name,
 		       tp.is_deleted,
 		       tp.created_at,
 		       tp.modified_at
 		FROM topic tp
-		INNER JOIN topic_type tt ON tp.type_id = tt.id
 		WHERE tp.id = $1
 	`, id).Scan(
 		&t.ID,
 		&t.SpaceID,
 		&t.Name,
 		&t.TypeID,
-		&typeName,
 		&t.IsDeleted,
 		&t.CreatedAt,
 		&t.ModifiedAt,
@@ -57,7 +53,6 @@ func (r *TopicsRepository) GetTopicByID(id int) (*models.Topic, error) {
 	if err != nil {
 		return nil, err
 	}
-	t.TypeName = typeName
 	return &t, nil
 }
 

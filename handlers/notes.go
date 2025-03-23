@@ -142,7 +142,7 @@ func (h *NotesHandler) CreateNote(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "No access to the space"})
 		return
 	}
-	if roleName == "guest" && topic.TypeName != "diary" {
+	if roleName == "guest" && topic.TypeID != 1 {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Guests can only create notes in diary topics"})
 		return
 	}

@@ -7,7 +7,6 @@ type Topic struct {
 	SpaceID    int       `json:"spaceId"`
 	Name       string    `json:"name"`
 	TypeID     int       `json:"typeId"`
-	TypeName   string    `json:"typeName"`
 	IsDeleted  bool      `json:"-"`
 	CreatedAt  time.Time `json:"createdAt"`
 	ModifiedAt time.Time `json:"modifiedAt"`
