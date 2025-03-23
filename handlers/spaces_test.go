@@ -50,8 +50,6 @@ func (s *E2ETestSuite) Test9_GuestCannotEditSpace() {
 	s.Equal(http.StatusForbidden, resp.StatusCode)
 }
 
-// New or modified tests start here:
-
 func (s *E2ETestSuite) Test10_GetAccessibleSpaces() {
 	req, _ := http.NewRequest("GET", s.baseURL+"/spaces", nil)
 	req.Header.Set("Authorization", "Bearer "+s.ownerToken)
@@ -85,10 +83,6 @@ func (s *E2ETestSuite) Test11_CreateParticipantAndInvite() {
 	s.NoError(err)
 	defer resp.Body.Close()
 	s.Equal(http.StatusCreated, resp.StatusCode)
-
-	// We don't need the token for participant. We only need the participant's user ID.
-	// For simplicity, let's assume the participant is userID=3, as we've created users in sequence.
-	// If you'd like to fetch it dynamically, you can replicate a "getUserID" approach.
 
 	reqBody := map[string]int{"userId": 3}
 	jsonBody, _ := json.Marshal(reqBody)
@@ -131,7 +125,6 @@ func (s *E2ETestSuite) Test13_RemoveUser_ParticipantNotFound() {
 }
 
 func (s *E2ETestSuite) Test14_RemoveUser_CannotRemoveOwner() {
-	// Owner is typically userID=1 in these tests
 	req, _ := http.NewRequest(
 		"DELETE",
 		s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/users/1",
@@ -157,4 +150,56 @@ func (s *E2ETestSuite) Test15_RemoveUser_Success() {
 	s.NoError(err)
 	defer resp.Body.Close()
 	s.Equal(http.StatusNoContent, resp.StatusCode)
+}
+
+func (s *E2ETestSuite) Test16_GetUsersInSpace_Success() {
+	req, _ := http.NewRequest("GET", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/users", nil)
+	req.Header.Set("Authorization", "Bearer "+s.ownerToken)
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	s.NoError(err)
+	defer resp.Body.Close()
+	s.Equal(http.StatusOK, resp.StatusCode)
+
+	var participants []map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&participants)
+	s.True(len(participants) >= 1)
+
+	foundOwner := false
+	for _, p := range participants {
+		if int(p["id"].(float64)) == 1 {
+			foundOwner = true
+			break
+		}
+	}
+	s.True(foundOwner)
+}
+
+func (s *E2ETestSuite) Test17_GetUsersInSpace_ForbiddenForNonMember() {
+	body := `{"username":"outsider","password":"outsiderpass"}`
+	resp, err := http.Post(s.baseURL+"/register", "application/json", bytes.NewBuffer([]byte(body)))
+	s.NoError(err)
+	defer resp.Body.Close()
+	s.Equal(http.StatusCreated, resp.StatusCode)
+
+	loginBody := `{"username":"outsider","password":"outsiderpass"}`
+	loginReq, _ := http.NewRequest("POST", s.baseURL+"/login", bytes.NewBuffer([]byte(loginBody)))
+	loginReq.Header.Set("Content-Type", "application/json")
+	client := &http.Client{}
+	loginResp, loginErr := client.Do(loginReq)
+	s.NoError(loginErr)
+	defer loginResp.Body.Close()
+	s.Equal(http.StatusOK, loginResp.StatusCode)
+
+	var data map[string]string
+	json.NewDecoder(loginResp.Body).Decode(&data)
+	outsiderToken := data["token"]
+	s.NotEmpty(outsiderToken)
+
+	req, _ := http.NewRequest("GET", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/users", nil)
+	req.Header.Set("Authorization", "Bearer "+outsiderToken)
+	resp2, err2 := client.Do(req)
+	s.NoError(err2)
+	defer resp2.Body.Close()
+	s.Equal(http.StatusForbidden, resp2.StatusCode)
 }

@@ -3,10 +3,19 @@ package repository
 import (
 	"database/sql"
 	"focuz-api/models"
+	"time"
 )
 
 type SpacesRepository struct {
 	db *sql.DB
+}
+
+// We'll return a dedicated struct for participants that includes roleId.
+type SpaceParticipant struct {
+	ID        int       `json:"id"`
+	Username  string    `json:"username"`
+	CreatedAt time.Time `json:"createdAt"`
+	RoleID    int       `json:"roleId"`
 }
 
 func NewSpacesRepository(db *sql.DB) *SpacesRepository {
@@ -188,4 +197,29 @@ func (r *SpacesRepository) RemoveUserFromSpace(userID, spaceID int) error {
 		WHERE user_id = $1 AND space_id = $2
 	`, userID, spaceID)
 	return err
+}
+
+// This method now returns roleId as well.
+func (r *SpacesRepository) GetUsersInSpace(spaceID int) ([]SpaceParticipant, error) {
+	rows, err := r.db.Query(`
+		SELECT u.id, u.username, u.created_at, uts.role_id
+		FROM users u
+		INNER JOIN user_to_space uts ON u.id = uts.user_id
+		WHERE uts.space_id = $1
+	`, spaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var participants []SpaceParticipant
+	for rows.Next() {
+		var p SpaceParticipant
+		err = rows.Scan(&p.ID, &p.Username, &p.CreatedAt, &p.RoleID)
+		if err != nil {
+			return nil, err
+		}
+		participants = append(participants, p)
+	}
+	return participants, nil
 }

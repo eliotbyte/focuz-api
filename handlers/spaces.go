@@ -35,7 +35,7 @@ func (h *SpacesHandler) CreateSpace(c *gin.Context) {
 }
 
 func (h *SpacesHandler) UpdateSpace(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
+	spaceID, err := strconv.Atoi(c.Param("spaceId"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid space ID"})
 		return
@@ -48,12 +48,12 @@ func (h *SpacesHandler) UpdateSpace(c *gin.Context) {
 		return
 	}
 	userID := c.GetInt("userId")
-	canEdit, err := h.spacesRepo.CanUserEditSpace(userID, id)
+	canEdit, err := h.spacesRepo.CanUserEditSpace(userID, spaceID)
 	if err != nil || !canEdit {
 		c.JSON(http.StatusForbidden, gin.H{"error": "No permission to edit space"})
 		return
 	}
-	err = h.spacesRepo.UpdateSpaceName(id, req.Name)
+	err = h.spacesRepo.UpdateSpaceName(spaceID, req.Name)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -62,18 +62,18 @@ func (h *SpacesHandler) UpdateSpace(c *gin.Context) {
 }
 
 func (h *SpacesHandler) DeleteSpace(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
+	spaceID, err := strconv.Atoi(c.Param("spaceId"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid space ID"})
 		return
 	}
 	userID := c.GetInt("userId")
-	canEdit, err := h.spacesRepo.CanUserEditSpace(userID, id)
+	canEdit, err := h.spacesRepo.CanUserEditSpace(userID, spaceID)
 	if err != nil || !canEdit {
 		c.JSON(http.StatusForbidden, gin.H{"error": "No permission to delete space"})
 		return
 	}
-	err = h.spacesRepo.SetSpaceDeleted(id, true)
+	err = h.spacesRepo.SetSpaceDeleted(spaceID, true)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -82,18 +82,18 @@ func (h *SpacesHandler) DeleteSpace(c *gin.Context) {
 }
 
 func (h *SpacesHandler) RestoreSpace(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
+	spaceID, err := strconv.Atoi(c.Param("spaceId"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid space ID"})
 		return
 	}
 	userID := c.GetInt("userId")
-	canEdit, err := h.spacesRepo.CanUserEditSpace(userID, id)
+	canEdit, err := h.spacesRepo.CanUserEditSpace(userID, spaceID)
 	if err != nil || !canEdit {
 		c.JSON(http.StatusForbidden, gin.H{"error": "No permission to restore space"})
 		return
 	}
-	err = h.spacesRepo.SetSpaceDeleted(id, false)
+	err = h.spacesRepo.SetSpaceDeleted(spaceID, false)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -102,13 +102,13 @@ func (h *SpacesHandler) RestoreSpace(c *gin.Context) {
 }
 
 func (h *SpacesHandler) InviteUser(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
+	spaceID, err := strconv.Atoi(c.Param("spaceId"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid space ID"})
 		return
 	}
 	userID := c.GetInt("userId")
-	canEdit, err := h.spacesRepo.CanUserEditSpace(userID, id)
+	canEdit, err := h.spacesRepo.CanUserEditSpace(userID, spaceID)
 	if err != nil || !canEdit {
 		c.JSON(http.StatusForbidden, gin.H{"error": "No permission to invite user"})
 		return
@@ -125,7 +125,7 @@ func (h *SpacesHandler) InviteUser(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Role not found"})
 		return
 	}
-	err = h.spacesRepo.InviteUserToSpace(req.UserID, id, roleGuest.ID)
+	err = h.spacesRepo.InviteUserToSpace(req.UserID, spaceID, roleGuest.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -144,7 +144,7 @@ func (h *SpacesHandler) GetAccessibleSpaces(c *gin.Context) {
 }
 
 func (h *SpacesHandler) RemoveUser(c *gin.Context) {
-	spaceID, err := strconv.Atoi(c.Param("id"))
+	spaceID, err := strconv.Atoi(c.Param("spaceId"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid space ID"})
 		return
@@ -183,4 +183,28 @@ func (h *SpacesHandler) RemoveUser(c *gin.Context) {
 		return
 	}
 	c.Status(http.StatusNoContent)
+}
+
+func (h *SpacesHandler) GetUsersInSpace(c *gin.Context) {
+	spaceID, err := strconv.Atoi(c.Param("spaceId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid space ID"})
+		return
+	}
+	userID := c.GetInt("userId")
+	hasAccess, _, err := h.spacesRepo.UserHasAccessToSpace(userID, spaceID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if !hasAccess {
+		c.JSON(http.StatusForbidden, gin.H{"error": "No access to the space"})
+		return
+	}
+	participants, err := h.spacesRepo.GetUsersInSpace(spaceID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, participants)
 }

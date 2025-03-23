@@ -75,21 +75,25 @@ func main() {
 
 	auth := r.Group("/", handlers.AuthMiddleware(jwtSecret))
 	{
+		// Spaces
 		auth.GET("/spaces", spacesHandler.GetAccessibleSpaces)
-		auth.DELETE("/spaces/:id/users/:userId", spacesHandler.RemoveUser)
+		auth.DELETE("/spaces/:spaceId/users/:userId", spacesHandler.RemoveUser)
+		auth.GET("/spaces/:spaceId/users", spacesHandler.GetUsersInSpace)
 
 		auth.POST("/spaces", spacesHandler.CreateSpace)
-		auth.PATCH("/spaces/:id", spacesHandler.UpdateSpace)
-		auth.PATCH("/spaces/:id/delete", spacesHandler.DeleteSpace)
-		auth.PATCH("/spaces/:id/restore", spacesHandler.RestoreSpace)
-		auth.POST("/spaces/:id/invite", spacesHandler.InviteUser)
+		auth.PATCH("/spaces/:spaceId", spacesHandler.UpdateSpace)
+		auth.PATCH("/spaces/:spaceId/delete", spacesHandler.DeleteSpace)
+		auth.PATCH("/spaces/:spaceId/restore", spacesHandler.RestoreSpace)
+		auth.POST("/spaces/:spaceId/invite", spacesHandler.InviteUser)
 
+		// Topics
 		auth.POST("/topics", topicsHandler.CreateTopic)
 		auth.PATCH("/topics/:id", topicsHandler.UpdateTopic)
 		auth.PATCH("/topics/:id/delete", topicsHandler.DeleteTopic)
 		auth.PATCH("/topics/:id/restore", topicsHandler.RestoreTopic)
 		auth.GET("/spaces/:spaceId/topics", topicsHandler.GetTopicsBySpace)
 
+		// Notes
 		auth.POST("/notes", notesHandler.CreateNote)
 		auth.PATCH("/notes/:id/delete", notesHandler.DeleteNote)
 		auth.PATCH("/notes/:id/restore", notesHandler.RestoreNote)
