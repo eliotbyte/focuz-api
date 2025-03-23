@@ -10,7 +10,7 @@ import (
 func (s *E2ETestSuite) Test10_CreateTopicAsOwner() {
 	reqBody := map[string]interface{}{
 		"spaceId": s.createdSpaceID,
-		"name":    "My Diary",
+		"name":    "My Notebook",
 		"typeId":  1,
 	}
 	jsonBody, _ := json.Marshal(reqBody)

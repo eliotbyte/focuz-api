@@ -50,10 +50,10 @@ func (s *E2ETestSuite) Test13_CreateNoteReply() {
 	s.Equal(http.StatusCreated, resp.StatusCode)
 }
 
-func (s *E2ETestSuite) Test14_CreateNoteAsGuestInDiary() {
+func (s *E2ETestSuite) Test14_CreateNoteAsGuestInNotebook() {
 	reqBody := map[string]interface{}{
-		"text":    "Guest diary note",
-		"tags":    []string{"guest", "diary"},
+		"text":    "Guest notebook note",
+		"tags":    []string{"guest", "notebook"},
 		"topicId": s.createdTopicID,
 	}
 	jsonBody, _ := json.Marshal(reqBody)
