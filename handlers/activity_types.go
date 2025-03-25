@@ -129,6 +129,21 @@ func (h *ActivityTypesHandler) DeleteActivityType(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "No permission"})
 		return
 	}
+
+	activityType, err := h.repo.GetActivityTypeByID(typeID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if activityType == nil || activityType.IsDeleted {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Activity type not found"})
+		return
+	}
+	if activityType.IsDefault {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Cannot delete default activity type"})
+		return
+	}
+
 	err = h.repo.UpdateActivityTypeDeleted(typeID, true)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -154,6 +169,19 @@ func (h *ActivityTypesHandler) RestoreActivityType(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "No permission"})
 		return
 	}
+	activityType, err := h.repo.GetActivityTypeByID(typeID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if activityType == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Activity type not found"})
+		return
+	}
+	if activityType.IsDefault {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Cannot restore default activity type"})
+		return
+	}
 	err = h.repo.UpdateActivityTypeDeleted(typeID, false)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -162,7 +190,6 @@ func (h *ActivityTypesHandler) RestoreActivityType(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-// New method
 func (h *ActivityTypesHandler) GetActivityTypesBySpace(c *gin.Context) {
 	spaceID, err := strconv.Atoi(c.Param("spaceId"))
 	if err != nil {

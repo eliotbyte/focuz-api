@@ -269,5 +269,63 @@ func (s *E2ETestSuite) Test31_GetActivityTypesBySpace() {
 
 	var types []map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&types)
-	s.True(len(types) >= 3) // Should include default types like 'mood', 'steps', 'sleep'
+	s.True(len(types) >= 3)
+}
+
+func (s *E2ETestSuite) Test31_CannotDeleteDefaultActivityType() {
+	req, _ := http.NewRequest("GET", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types", nil)
+	req.Header.Set("Authorization", "Bearer "+s.ownerToken)
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	s.NoError(err)
+	defer resp.Body.Close()
+	s.Equal(http.StatusOK, resp.StatusCode)
+
+	var types []map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&types)
+
+	var defaultTypeID int
+	for _, t := range types {
+		if t["isDefault"].(bool) && t["name"] == "mood" {
+			defaultTypeID = int(t["id"].(float64))
+			break
+		}
+	}
+	s.True(defaultTypeID > 0)
+
+	reqDel, _ := http.NewRequest("PATCH", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types/"+strconv.Itoa(defaultTypeID)+"/delete", nil)
+	reqDel.Header.Set("Authorization", "Bearer "+s.ownerToken)
+	respDel, errDel := client.Do(reqDel)
+	s.NoError(errDel)
+	defer respDel.Body.Close()
+	s.Equal(http.StatusForbidden, respDel.StatusCode)
+}
+
+func (s *E2ETestSuite) Test32_CannotRestoreDefaultActivityType() {
+	req, _ := http.NewRequest("GET", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types", nil)
+	req.Header.Set("Authorization", "Bearer "+s.ownerToken)
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	s.NoError(err)
+	defer resp.Body.Close()
+	s.Equal(http.StatusOK, resp.StatusCode)
+
+	var types []map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&types)
+
+	var defaultTypeID int
+	for _, t := range types {
+		if t["isDefault"].(bool) && t["name"] == "mood" {
+			defaultTypeID = int(t["id"].(float64))
+			break
+		}
+	}
+	s.True(defaultTypeID > 0)
+
+	reqRestore, _ := http.NewRequest("PATCH", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types/"+strconv.Itoa(defaultTypeID)+"/restore", nil)
+	reqRestore.Header.Set("Authorization", "Bearer "+s.ownerToken)
+	respRestore, errRestore := client.Do(reqRestore)
+	s.NoError(errRestore)
+	defer respRestore.Body.Close()
+	s.Equal(http.StatusForbidden, respRestore.StatusCode)
 }
