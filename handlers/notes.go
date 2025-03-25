@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"focuz-api/globals"
 	"focuz-api/repository"
 	"net/http"
 	"strconv"
@@ -137,12 +138,16 @@ func (h *NotesHandler) CreateNote(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid topic"})
 		return
 	}
-	hasAccess, roleName, err := h.spacesRepo.UserHasAccessToSpace(userID, topic.SpaceID)
-	if err != nil || !hasAccess {
+	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, topic.SpaceID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if roleID == 0 {
 		c.JSON(http.StatusForbidden, gin.H{"error": "No access to the space"})
 		return
 	}
-	if roleName == "guest" && topic.TypeID != 1 {
+	if roleID != globals.DefaultOwnerRoleID && topic.TypeID != 1 {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Guests can only create notes in notebook topics"})
 		return
 	}
@@ -175,12 +180,16 @@ func (h *NotesHandler) DeleteNote(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Topic error"})
 		return
 	}
-	hasAccess, roleName, err := h.spacesRepo.UserHasAccessToSpace(userID, topic.SpaceID)
-	if err != nil || !hasAccess {
+	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, topic.SpaceID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if roleID == 0 {
 		c.JSON(http.StatusForbidden, gin.H{"error": "No access to the space"})
 		return
 	}
-	if roleName == "guest" {
+	if roleID != globals.DefaultOwnerRoleID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Guests cannot delete notes"})
 		return
 	}
@@ -212,12 +221,16 @@ func (h *NotesHandler) RestoreNote(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Topic error"})
 		return
 	}
-	hasAccess, roleName, err := h.spacesRepo.UserHasAccessToSpace(userID, topic.SpaceID)
-	if err != nil || !hasAccess {
+	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, topic.SpaceID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if roleID == 0 {
 		c.JSON(http.StatusForbidden, gin.H{"error": "No access to the space"})
 		return
 	}
-	if roleName == "guest" {
+	if roleID != globals.DefaultOwnerRoleID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Guests cannot restore notes"})
 		return
 	}
@@ -249,8 +262,12 @@ func (h *NotesHandler) GetNote(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Topic error"})
 		return
 	}
-	hasAccess, _, err := h.spacesRepo.UserHasAccessToSpace(userID, topic.SpaceID)
-	if err != nil || !hasAccess {
+	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, topic.SpaceID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if roleID == 0 {
 		c.JSON(http.StatusForbidden, gin.H{"error": "No access to the space"})
 		return
 	}
@@ -269,8 +286,12 @@ func (h *NotesHandler) GetNotes(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid spaceId"})
 		return
 	}
-	hasAccess, _, err := h.spacesRepo.UserHasAccessToSpace(userID, spaceID)
-	if err != nil || !hasAccess {
+	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, spaceID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if roleID == 0 {
 		c.JSON(http.StatusForbidden, gin.H{"error": "No access to the space"})
 		return
 	}

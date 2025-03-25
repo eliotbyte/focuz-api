@@ -10,8 +10,6 @@ CREATE TABLE role (
     name VARCHAR(50) NOT NULL UNIQUE
 );
 
-INSERT INTO role (name) VALUES ('owner'), ('guest');
-
 CREATE TABLE space (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
@@ -90,11 +88,5 @@ CREATE TABLE activity_types (
     category_id INTEGER REFERENCES activity_type_category(id),
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     modified_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    UNIQUE(name, space_id)
+    UNIQUE (name, space_id)
 );
-
-INSERT INTO activity_types (name, value_type, min_value, max_value, aggregation, is_default)
-VALUES 
-    ('mood', 'integer', 1, 10, 'avg', TRUE),
-    ('steps', 'integer', 0, NULL, 'sum', TRUE),
-    ('sleep', 'time', 0, NULL, 'sum', TRUE);

@@ -10,7 +10,6 @@ type SpacesRepository struct {
 	db *sql.DB
 }
 
-// We'll return a dedicated struct for participants that includes roleId.
 type SpaceParticipant struct {
 	ID        int       `json:"id"`
 	Username  string    `json:"username"`
@@ -39,19 +38,12 @@ func (r *SpacesRepository) CreateSpace(name string, ownerID int) (*models.Space,
 		return nil, err
 	}
 
-	var roleID int
-	err = tx.QueryRow(`
-		SELECT id FROM role WHERE name = 'owner'
-	`).Scan(&roleID)
-	if err != nil {
-		return nil, err
-	}
-
+	// The role ID of the "owner" is passed in as ownerID here.
 	_, err = tx.Exec(`
 		INSERT INTO user_to_space (user_id, space_id, role_id)
 		VALUES ($1, $2, $3)
 		ON CONFLICT (user_id, space_id) DO NOTHING
-	`, ownerID, spaceID, roleID)
+	`, ownerID, spaceID, ownerID)
 	if err != nil {
 		return nil, err
 	}
@@ -79,67 +71,24 @@ func (r *SpacesRepository) GetSpaceByID(id int) (*models.Space, error) {
 	return &s, nil
 }
 
-func (r *SpacesRepository) CanUserEditSpace(userID, spaceID int) (bool, error) {
-	var count int
+// Returns the role_id for the user in the space, or 0 if the user is not a member.
+func (r *SpacesRepository) GetUserRoleIDInSpace(userID, spaceID int) (int, error) {
+	var roleID int
 	err := r.db.QueryRow(`
-		SELECT COUNT(*)
-		FROM user_to_space uts
-		INNER JOIN role r ON uts.role_id = r.id
-		WHERE uts.user_id = $1
-		  AND uts.space_id = $2
-		  AND r.name = 'owner'
-	`, userID, spaceID).Scan(&count)
-	if err != nil {
-		return false, err
-	}
-	return count > 0, nil
-}
-
-func (r *SpacesRepository) UpdateSpaceName(spaceID int, name string) error {
-	_, err := r.db.Exec(`
-		UPDATE space
-		SET name = $1, modified_at = NOW()
-		WHERE id = $2
-	`, name, spaceID)
-	return err
-}
-
-func (r *SpacesRepository) SetSpaceDeleted(spaceID int, isDeleted bool) error {
-	_, err := r.db.Exec(`
-		UPDATE space
-		SET is_deleted = $1, modified_at = NOW()
-		WHERE id = $2
-	`, isDeleted, spaceID)
-	return err
-}
-
-func (r *SpacesRepository) UserHasAccessToSpace(userID, spaceID int) (bool, string, error) {
-	var roleName string
-	err := r.db.QueryRow(`
-		SELECT r.name
-		FROM user_to_space uts
-		INNER JOIN role r ON uts.role_id = r.id
-		WHERE uts.user_id = $1
-		  AND uts.space_id = $2
-	`, userID, spaceID).Scan(&roleName)
+		SELECT role_id
+		FROM user_to_space
+		WHERE user_id = $1 AND space_id = $2
+	`, userID, spaceID).Scan(&roleID)
 	if err == sql.ErrNoRows {
-		return false, "", nil
+		return 0, nil
 	}
 	if err != nil {
-		return false, "", err
+		return 0, err
 	}
-	return true, roleName, nil
+	return roleID, nil
 }
 
-func (r *SpacesRepository) InviteUserToSpace(userID, spaceID, roleID int) error {
-	_, err := r.db.Exec(`
-		INSERT INTO user_to_space (user_id, space_id, role_id)
-		VALUES ($1, $2, $3)
-		ON CONFLICT (user_id, space_id) DO UPDATE SET role_id = EXCLUDED.role_id
-	`, userID, spaceID, roleID)
-	return err
-}
-
+// GetSpacesForUser returns all non-deleted spaces the user belongs to.
 func (r *SpacesRepository) GetSpacesForUser(userID int) ([]models.Space, error) {
 	rows, err := r.db.Query(`
 		SELECT s.id, s.name, s.owner_id, s.is_deleted, s.created_at, s.modified_at
@@ -173,22 +122,13 @@ func (r *SpacesRepository) GetSpacesForUser(userID int) ([]models.Space, error) 
 	return result, nil
 }
 
-func (r *SpacesRepository) GetUserRoleInSpace(userID, spaceID int) (string, error) {
-	var roleName string
-	err := r.db.QueryRow(`
-		SELECT r.name
-		FROM user_to_space uts
-		INNER JOIN role r ON uts.role_id = r.id
-		WHERE uts.user_id = $1
-		  AND uts.space_id = $2
-	`, userID, spaceID).Scan(&roleName)
-	if err == sql.ErrNoRows {
-		return "", nil
-	}
-	if err != nil {
-		return "", err
-	}
-	return roleName, nil
+func (r *SpacesRepository) InviteUserToSpace(userID, spaceID, roleID int) error {
+	_, err := r.db.Exec(`
+		INSERT INTO user_to_space (user_id, space_id, role_id)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (user_id, space_id) DO UPDATE SET role_id = EXCLUDED.role_id
+	`, userID, spaceID, roleID)
+	return err
 }
 
 func (r *SpacesRepository) RemoveUserFromSpace(userID, spaceID int) error {
@@ -199,7 +139,6 @@ func (r *SpacesRepository) RemoveUserFromSpace(userID, spaceID int) error {
 	return err
 }
 
-// This method now returns roleId as well.
 func (r *SpacesRepository) GetUsersInSpace(spaceID int) ([]SpaceParticipant, error) {
 	rows, err := r.db.Query(`
 		SELECT u.id, u.username, u.created_at, uts.role_id
@@ -222,4 +161,24 @@ func (r *SpacesRepository) GetUsersInSpace(spaceID int) ([]SpaceParticipant, err
 		participants = append(participants, p)
 	}
 	return participants, nil
+}
+
+// Sets or unsets the is_deleted flag on a space.
+func (r *SpacesRepository) SetSpaceDeleted(spaceID int, isDeleted bool) error {
+	_, err := r.db.Exec(`
+		UPDATE space
+		SET is_deleted = $1, modified_at = NOW()
+		WHERE id = $2
+	`, isDeleted, spaceID)
+	return err
+}
+
+// Updates the name of a space.
+func (r *SpacesRepository) UpdateSpaceName(spaceID int, name string) error {
+	_, err := r.db.Exec(`
+		UPDATE space
+		SET name = $1, modified_at = NOW()
+		WHERE id = $2
+	`, name, spaceID)
+	return err
 }

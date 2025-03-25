@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"focuz-api/globals"
 	"focuz-api/repository"
 	"net/http"
 	"strconv"
@@ -26,11 +27,16 @@ func (h *ActivityTypesHandler) CreateActivityType(c *gin.Context) {
 		return
 	}
 	userID := c.GetInt("userId")
-	canEdit, err := h.spacesRepo.CanUserEditSpace(userID, spaceID)
-	if err != nil || !canEdit {
+	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, spaceID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if roleID == 0 || roleID != globals.DefaultOwnerRoleID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "No permission"})
 		return
 	}
+
 	var req struct {
 		Name        string   `json:"name"`
 		ValueType   string   `json:"value_type"`
@@ -89,6 +95,7 @@ func (h *ActivityTypesHandler) CreateActivityType(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "time cannot have a unit"})
 		return
 	}
+
 	var spacePtr *int
 	spacePtr = &spaceID
 	created, err := h.repo.CreateActivityType(
@@ -124,8 +131,12 @@ func (h *ActivityTypesHandler) DeleteActivityType(c *gin.Context) {
 		return
 	}
 	userID := c.GetInt("userId")
-	canEdit, err := h.spacesRepo.CanUserEditSpace(userID, spaceID)
-	if err != nil || !canEdit {
+	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, spaceID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if roleID == 0 || roleID != globals.DefaultOwnerRoleID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "No permission"})
 		return
 	}
@@ -164,8 +175,12 @@ func (h *ActivityTypesHandler) RestoreActivityType(c *gin.Context) {
 		return
 	}
 	userID := c.GetInt("userId")
-	canEdit, err := h.spacesRepo.CanUserEditSpace(userID, spaceID)
-	if err != nil || !canEdit {
+	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, spaceID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if roleID == 0 || roleID != globals.DefaultOwnerRoleID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "No permission"})
 		return
 	}
@@ -197,12 +212,12 @@ func (h *ActivityTypesHandler) GetActivityTypesBySpace(c *gin.Context) {
 		return
 	}
 	userID := c.GetInt("userId")
-	hasAccess, _, err := h.spacesRepo.UserHasAccessToSpace(userID, spaceID)
+	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, spaceID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	if !hasAccess {
+	if roleID == 0 {
 		c.JSON(http.StatusForbidden, gin.H{"error": "No access to the space"})
 		return
 	}

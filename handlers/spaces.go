@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"focuz-api/globals"
 	"focuz-api/repository"
 	"net/http"
 	"strconv"
@@ -26,11 +27,21 @@ func (h *SpacesHandler) CreateSpace(c *gin.Context) {
 		return
 	}
 	userID := c.GetInt("userId")
-	space, err := h.spacesRepo.CreateSpace(req.Name, userID)
+
+	// We treat the new space creation as "owner" role, using the global default.
+	space, err := h.spacesRepo.CreateSpace(req.Name, globals.DefaultOwnerRoleID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
+	// Invite the current user with the owner role.
+	err = h.spacesRepo.InviteUserToSpace(userID, space.ID, globals.DefaultOwnerRoleID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
 	c.JSON(http.StatusCreated, space)
 }
 
@@ -47,12 +58,18 @@ func (h *SpacesHandler) UpdateSpace(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
 	userID := c.GetInt("userId")
-	canEdit, err := h.spacesRepo.CanUserEditSpace(userID, spaceID)
-	if err != nil || !canEdit {
+	userRoleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, spaceID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if userRoleID == 0 || userRoleID != globals.DefaultOwnerRoleID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "No permission to edit space"})
 		return
 	}
+
 	err = h.spacesRepo.UpdateSpaceName(spaceID, req.Name)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -68,8 +85,12 @@ func (h *SpacesHandler) DeleteSpace(c *gin.Context) {
 		return
 	}
 	userID := c.GetInt("userId")
-	canEdit, err := h.spacesRepo.CanUserEditSpace(userID, spaceID)
-	if err != nil || !canEdit {
+	userRoleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, spaceID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if userRoleID == 0 || userRoleID != globals.DefaultOwnerRoleID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "No permission to delete space"})
 		return
 	}
@@ -88,8 +109,12 @@ func (h *SpacesHandler) RestoreSpace(c *gin.Context) {
 		return
 	}
 	userID := c.GetInt("userId")
-	canEdit, err := h.spacesRepo.CanUserEditSpace(userID, spaceID)
-	if err != nil || !canEdit {
+	userRoleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, spaceID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if userRoleID == 0 || userRoleID != globals.DefaultOwnerRoleID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "No permission to restore space"})
 		return
 	}
@@ -108,8 +133,12 @@ func (h *SpacesHandler) InviteUser(c *gin.Context) {
 		return
 	}
 	userID := c.GetInt("userId")
-	canEdit, err := h.spacesRepo.CanUserEditSpace(userID, spaceID)
-	if err != nil || !canEdit {
+	userRoleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, spaceID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if userRoleID == 0 || userRoleID != globals.DefaultOwnerRoleID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "No permission to invite user"})
 		return
 	}
@@ -150,30 +179,31 @@ func (h *SpacesHandler) RemoveUser(c *gin.Context) {
 		return
 	}
 	userID := c.GetInt("userId")
-	roleName, err := h.spacesRepo.GetUserRoleInSpace(userID, spaceID)
+	userRoleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, spaceID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	if roleName != "owner" {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Guests cannot remove participants"})
+	if userRoleID == 0 || userRoleID != globals.DefaultOwnerRoleID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "No permission to remove participants"})
 		return
 	}
+
 	userToRemoveID, err := strconv.Atoi(c.Param("userId"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
 		return
 	}
-	targetRole, err := h.spacesRepo.GetUserRoleInSpace(userToRemoveID, spaceID)
+	targetRoleID, err := h.spacesRepo.GetUserRoleIDInSpace(userToRemoveID, spaceID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	if targetRole == "" {
+	if targetRoleID == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Participant not found in space"})
 		return
 	}
-	if targetRole == "owner" {
+	if targetRoleID == globals.DefaultOwnerRoleID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Cannot remove the creator"})
 		return
 	}
@@ -192,12 +222,12 @@ func (h *SpacesHandler) GetUsersInSpace(c *gin.Context) {
 		return
 	}
 	userID := c.GetInt("userId")
-	hasAccess, _, err := h.spacesRepo.UserHasAccessToSpace(userID, spaceID)
+	userRoleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, spaceID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	if !hasAccess {
+	if userRoleID == 0 {
 		c.JSON(http.StatusForbidden, gin.H{"error": "No access to the space"})
 		return
 	}

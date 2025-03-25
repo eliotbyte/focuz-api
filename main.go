@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"focuz-api/handlers"
+	"focuz-api/initializers"
 	"focuz-api/repository"
 	"log"
 	"os"
@@ -56,6 +57,10 @@ func main() {
 		log.Fatal("Migration failed:", err)
 	}
 
+	if err := initializers.InitDefaults(db); err != nil {
+		log.Fatal("Failed to initialize default data:", err)
+	}
+
 	spacesRepo := repository.NewSpacesRepository(db)
 	topicsRepo := repository.NewTopicsRepository(db)
 	notesRepo := repository.NewNotesRepository(db)
@@ -98,7 +103,7 @@ func main() {
 		auth.GET("/notes/:id", notesHandler.GetNote)
 		auth.GET("/notes", notesHandler.GetNotes)
 
-		auth.GET("/spaces/:spaceId/activity-types", activityTypesHandler.GetActivityTypesBySpace) // New route
+		auth.GET("/spaces/:spaceId/activity-types", activityTypesHandler.GetActivityTypesBySpace)
 		auth.POST("/spaces/:spaceId/activity-types", activityTypesHandler.CreateActivityType)
 		auth.PATCH("/spaces/:spaceId/activity-types/:typeId/delete", activityTypesHandler.DeleteActivityType)
 		auth.PATCH("/spaces/:spaceId/activity-types/:typeId/restore", activityTypesHandler.RestoreActivityType)

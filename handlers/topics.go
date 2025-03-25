@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"focuz-api/globals"
 	"focuz-api/repository"
 	"net/http"
 	"strconv"
@@ -28,8 +29,17 @@ func (h *TopicsHandler) CreateTopic(c *gin.Context) {
 		return
 	}
 	userID := c.GetInt("userId")
-	canEdit, err := h.spacesRepo.CanUserEditSpace(userID, req.SpaceID)
-	if err != nil || !canEdit {
+	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, req.SpaceID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if roleID == 0 {
+		c.JSON(http.StatusForbidden, gin.H{"error": "No permission to create topic"})
+		return
+	}
+	// Only owner can create a topic
+	if roleID != globals.DefaultOwnerRoleID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "No permission to create topic"})
 		return
 	}
@@ -60,8 +70,12 @@ func (h *TopicsHandler) UpdateTopic(c *gin.Context) {
 		return
 	}
 	userID := c.GetInt("userId")
-	canEdit, err := h.spacesRepo.CanUserEditSpace(userID, topic.SpaceID)
-	if err != nil || !canEdit {
+	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, topic.SpaceID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if roleID == 0 || roleID != globals.DefaultOwnerRoleID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "No permission to update topic"})
 		return
 	}
@@ -85,8 +99,12 @@ func (h *TopicsHandler) DeleteTopic(c *gin.Context) {
 		return
 	}
 	userID := c.GetInt("userId")
-	canEdit, err := h.spacesRepo.CanUserEditSpace(userID, topic.SpaceID)
-	if err != nil || !canEdit {
+	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, topic.SpaceID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if roleID == 0 || roleID != globals.DefaultOwnerRoleID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "No permission to delete topic"})
 		return
 	}
@@ -110,8 +128,12 @@ func (h *TopicsHandler) RestoreTopic(c *gin.Context) {
 		return
 	}
 	userID := c.GetInt("userId")
-	canEdit, err := h.spacesRepo.CanUserEditSpace(userID, topic.SpaceID)
-	if err != nil || !canEdit {
+	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, topic.SpaceID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if roleID == 0 || roleID != globals.DefaultOwnerRoleID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "No permission to restore topic"})
 		return
 	}
@@ -130,12 +152,12 @@ func (h *TopicsHandler) GetTopicsBySpace(c *gin.Context) {
 		return
 	}
 	userID := c.GetInt("userId")
-	hasAccess, _, err := h.spacesRepo.UserHasAccessToSpace(userID, spaceID)
+	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, spaceID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	if !hasAccess {
+	if roleID == 0 {
 		c.JSON(http.StatusForbidden, gin.H{"error": "No access to the space"})
 		return
 	}
