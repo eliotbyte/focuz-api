@@ -147,8 +147,8 @@ func (h *NotesHandler) CreateNote(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "No access to the space"})
 		return
 	}
-	if roleID != globals.DefaultOwnerRoleID && topic.TypeID != 1 {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Guests can only create notes in notebook topics"})
+	if topic.TypeID != globals.DefaultNotebookTypeID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Notes can only be created in notebook topics"})
 		return
 	}
 	note, err := h.repo.CreateNote(userID, req.Text, req.Tags, req.ParentID, req.Date, *req.TopicID)

@@ -32,8 +32,6 @@ CREATE TABLE topic_type (
     name VARCHAR(50) NOT NULL UNIQUE
 );
 
-INSERT INTO topic_type (name) VALUES ('notebook'), ('dashboard');
-
 CREATE TABLE topic (
     id SERIAL PRIMARY KEY,
     space_id INTEGER NOT NULL REFERENCES space(id),

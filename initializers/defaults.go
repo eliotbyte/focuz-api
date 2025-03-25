@@ -5,8 +5,6 @@ import (
 	"focuz-api/globals"
 )
 
-// InitDefaults is called once on application start to ensure
-// that required default roles, categories, and activity types exist.
 func InitDefaults(db *sql.DB) error {
 	ownerID, err := ensureRole(db, "owner")
 	if err != nil {
@@ -30,7 +28,17 @@ func InitDefaults(db *sql.DB) error {
 	globals.DefaultHealthCatID = healthID
 	globals.DefaultFinanceCatID = financeID
 
-	// Ensure default activity types:
+	notebookID, err := ensureTopicType(db, "notebook")
+	if err != nil {
+		return err
+	}
+	dashboardID, err := ensureTopicType(db, "dashboard")
+	if err != nil {
+		return err
+	}
+	globals.DefaultNotebookTypeID = notebookID
+	globals.DefaultDashboardTypeID = dashboardID
+
 	if _, err := ensureActivityType(db, "mood", "integer", 1.0, 10.0, "avg", nil, healthID, nil, true); err != nil {
 		return err
 	}
@@ -72,6 +80,20 @@ func ensureCategory(db *sql.DB, name string) (int, error) {
 	return id, nil
 }
 
+func ensureTopicType(db *sql.DB, name string) (int, error) {
+	var id int
+	err := db.QueryRow("SELECT id FROM topic_type WHERE name = $1", name).Scan(&id)
+	if err == sql.ErrNoRows {
+		err = db.QueryRow("INSERT INTO topic_type (name) VALUES ($1) RETURNING id", name).Scan(&id)
+		if err != nil {
+			return 0, err
+		}
+	} else if err != nil {
+		return 0, err
+	}
+	return id, nil
+}
+
 func ensureActivityType(
 	db *sql.DB,
 	name, valueType string,
@@ -81,7 +103,6 @@ func ensureActivityType(
 	unit interface{},
 	isDefault bool,
 ) (int, error) {
-
 	var id int
 	query := `
 	  SELECT id FROM activity_types 
