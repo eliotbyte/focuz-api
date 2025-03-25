@@ -84,7 +84,6 @@ func (s *E2ETestSuite) Test22_DeleteActivityType() {
 }
 
 func (s *E2ETestSuite) Test23_RestoreActivityType() {
-	// Create a type to restore
 	body := map[string]interface{}{
 		"name":        "restorable",
 		"value_type":  "boolean",
@@ -108,7 +107,6 @@ func (s *E2ETestSuite) Test23_RestoreActivityType() {
 	json.NewDecoder(respCreate.Body).Decode(&respData)
 	typeID := int(respData["id"].(float64))
 
-	// Delete it
 	reqDel, _ := http.NewRequest("PATCH", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types/"+strconv.Itoa(typeID)+"/delete", nil)
 	reqDel.Header.Set("Authorization", "Bearer "+s.ownerToken)
 	respDel, delErr := client.Do(reqDel)
@@ -119,7 +117,6 @@ func (s *E2ETestSuite) Test23_RestoreActivityType() {
 	defer respDel.Body.Close()
 	s.Equal(http.StatusNoContent, respDel.StatusCode)
 
-	// Restore it
 	reqRestore, _ := http.NewRequest("PATCH", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types/"+strconv.Itoa(typeID)+"/restore", nil)
 	reqRestore.Header.Set("Authorization", "Bearer "+s.ownerToken)
 	respRestore, restoreErr := client.Do(reqRestore)
@@ -147,7 +144,6 @@ func (s *E2ETestSuite) Test24_CreateActivityType_DuplicateName() {
 	defer resp.Body.Close()
 	s.Equal(http.StatusCreated, resp.StatusCode)
 
-	// Try again with same name
 	req2, _ := http.NewRequest("POST", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types", bytes.NewBuffer(jsonBody))
 	req2.Header.Set("Content-Type", "application/json")
 	req2.Header.Set("Authorization", "Bearer "+s.ownerToken)
@@ -260,4 +256,18 @@ func (s *E2ETestSuite) Test30_TextWithInvalidAggregation() {
 	s.NoError(err)
 	defer resp.Body.Close()
 	s.Equal(http.StatusBadRequest, resp.StatusCode)
+}
+
+func (s *E2ETestSuite) Test31_GetActivityTypesBySpace() {
+	req, _ := http.NewRequest("GET", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types", nil)
+	req.Header.Set("Authorization", "Bearer "+s.ownerToken)
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	s.NoError(err)
+	defer resp.Body.Close()
+	s.Equal(http.StatusOK, resp.StatusCode)
+
+	var types []map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&types)
+	s.True(len(types) >= 3) // Should include default types like 'mood', 'steps', 'sleep'
 }

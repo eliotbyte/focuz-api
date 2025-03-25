@@ -161,3 +161,28 @@ func (h *ActivityTypesHandler) RestoreActivityType(c *gin.Context) {
 	}
 	c.Status(http.StatusNoContent)
 }
+
+// New method
+func (h *ActivityTypesHandler) GetActivityTypesBySpace(c *gin.Context) {
+	spaceID, err := strconv.Atoi(c.Param("spaceId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid space ID"})
+		return
+	}
+	userID := c.GetInt("userId")
+	hasAccess, _, err := h.spacesRepo.UserHasAccessToSpace(userID, spaceID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if !hasAccess {
+		c.JSON(http.StatusForbidden, gin.H{"error": "No access to the space"})
+		return
+	}
+	activityTypes, err := h.repo.GetActivityTypesBySpace(spaceID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, activityTypes)
+}

@@ -98,6 +98,7 @@ func main() {
 		auth.GET("/notes/:id", notesHandler.GetNote)
 		auth.GET("/notes", notesHandler.GetNotes)
 
+		auth.GET("/spaces/:spaceId/activity-types", activityTypesHandler.GetActivityTypesBySpace) // New route
 		auth.POST("/spaces/:spaceId/activity-types", activityTypesHandler.CreateActivityType)
 		auth.PATCH("/spaces/:spaceId/activity-types/:typeId/delete", activityTypesHandler.DeleteActivityType)
 		auth.PATCH("/spaces/:spaceId/activity-types/:typeId/restore", activityTypesHandler.RestoreActivityType)
