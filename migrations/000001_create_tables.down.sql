@@ -7,3 +7,5 @@ DROP TABLE IF EXISTS user_to_space;
 DROP TABLE IF EXISTS space;
 DROP TABLE IF EXISTS role;
 DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS activity_types;
+DROP TABLE IF EXISTS activity_type_category;

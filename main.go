@@ -60,10 +60,12 @@ func main() {
 	topicsRepo := repository.NewTopicsRepository(db)
 	notesRepo := repository.NewNotesRepository(db)
 	rolesRepo := repository.NewRolesRepository(db)
+	activityTypesRepo := repository.NewActivityTypesRepository(db)
 
 	notesHandler := handlers.NewNotesHandler(notesRepo, spacesRepo, topicsRepo)
 	spacesHandler := handlers.NewSpacesHandler(spacesRepo, rolesRepo)
 	topicsHandler := handlers.NewTopicsHandler(topicsRepo, spacesRepo)
+	activityTypesHandler := handlers.NewActivityTypesHandler(activityTypesRepo, spacesRepo)
 
 	r := gin.Default()
 
@@ -75,30 +77,30 @@ func main() {
 
 	auth := r.Group("/", handlers.AuthMiddleware(jwtSecret))
 	{
-		// Spaces
 		auth.GET("/spaces", spacesHandler.GetAccessibleSpaces)
 		auth.DELETE("/spaces/:spaceId/users/:userId", spacesHandler.RemoveUser)
 		auth.GET("/spaces/:spaceId/users", spacesHandler.GetUsersInSpace)
-
 		auth.POST("/spaces", spacesHandler.CreateSpace)
 		auth.PATCH("/spaces/:spaceId", spacesHandler.UpdateSpace)
 		auth.PATCH("/spaces/:spaceId/delete", spacesHandler.DeleteSpace)
 		auth.PATCH("/spaces/:spaceId/restore", spacesHandler.RestoreSpace)
 		auth.POST("/spaces/:spaceId/invite", spacesHandler.InviteUser)
 
-		// Topics
 		auth.POST("/topics", topicsHandler.CreateTopic)
 		auth.PATCH("/topics/:id", topicsHandler.UpdateTopic)
 		auth.PATCH("/topics/:id/delete", topicsHandler.DeleteTopic)
 		auth.PATCH("/topics/:id/restore", topicsHandler.RestoreTopic)
 		auth.GET("/spaces/:spaceId/topics", topicsHandler.GetTopicsBySpace)
 
-		// Notes
 		auth.POST("/notes", notesHandler.CreateNote)
 		auth.PATCH("/notes/:id/delete", notesHandler.DeleteNote)
 		auth.PATCH("/notes/:id/restore", notesHandler.RestoreNote)
 		auth.GET("/notes/:id", notesHandler.GetNote)
 		auth.GET("/notes", notesHandler.GetNotes)
+
+		auth.POST("/spaces/:spaceId/activity-types", activityTypesHandler.CreateActivityType)
+		auth.PATCH("/spaces/:spaceId/activity-types/:typeId/delete", activityTypesHandler.DeleteActivityType)
+		auth.PATCH("/spaces/:spaceId/activity-types/:typeId/restore", activityTypesHandler.RestoreActivityType)
 	}
 
 	r.Run(":8080")

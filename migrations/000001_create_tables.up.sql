@@ -70,3 +70,27 @@ CREATE TABLE note_to_tag (
     tag_id INTEGER NOT NULL REFERENCES tag(id),
     UNIQUE (note_id, tag_id)
 );
+
+CREATE TABLE activity_type_category (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL UNIQUE
+);
+
+CREATE TABLE activity_types (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    value_type VARCHAR(50) NOT NULL,
+    min_value DOUBLE PRECISION,
+    max_value DOUBLE PRECISION,
+    aggregation VARCHAR(50) NOT NULL,
+    space_id INTEGER REFERENCES space(id),
+    is_default BOOLEAN NOT NULL DEFAULT false,
+    is_deleted BOOLEAN NOT NULL DEFAULT false,
+    unit VARCHAR(50),
+    category_id INTEGER REFERENCES activity_type_category(id),
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    modified_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE activity_types
+ADD CONSTRAINT uq_activity_types_name_space_id UNIQUE (name, space_id);
