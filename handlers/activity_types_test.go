@@ -48,7 +48,6 @@ func (s *E2ETestSuite) Test21_CreateActivityType_MinValueError() {
 }
 
 func (s *E2ETestSuite) Test22_DeleteActivityType() {
-	// We assume "money" exists, but we need its ID. For simplicity, we recreate it or fetch it. We'll just try to create again for a conflict test, then parse ID if needed.
 	body := map[string]interface{}{
 		"name":        "money",
 		"value_type":  "float",
@@ -59,7 +58,12 @@ func (s *E2ETestSuite) Test22_DeleteActivityType() {
 	reqCreate.Header.Set("Authorization", "Bearer "+s.ownerToken)
 	reqCreate.Header.Set("Content-Type", "application/json")
 	client := &http.Client{}
-	respCreate, _ := client.Do(reqCreate)
+
+	respCreate, err := client.Do(reqCreate)
+	s.NoError(err)
+	if err != nil {
+		return
+	}
 	defer respCreate.Body.Close()
 
 	if respCreate.StatusCode == http.StatusCreated {
@@ -71,6 +75,9 @@ func (s *E2ETestSuite) Test22_DeleteActivityType() {
 		reqDel.Header.Set("Authorization", "Bearer "+s.ownerToken)
 		respDel, delErr := client.Do(reqDel)
 		s.NoError(delErr)
+		if delErr != nil {
+			return
+		}
 		defer respDel.Body.Close()
 		s.Equal(http.StatusNoContent, respDel.StatusCode)
 	}
@@ -88,7 +95,12 @@ func (s *E2ETestSuite) Test23_RestoreActivityType() {
 	reqCreate.Header.Set("Authorization", "Bearer "+s.ownerToken)
 	reqCreate.Header.Set("Content-Type", "application/json")
 	client := &http.Client{}
-	respCreate, _ := client.Do(reqCreate)
+
+	respCreate, err := client.Do(reqCreate)
+	s.NoError(err)
+	if err != nil {
+		return
+	}
 	defer respCreate.Body.Close()
 	s.Equal(http.StatusCreated, respCreate.StatusCode)
 
@@ -99,13 +111,22 @@ func (s *E2ETestSuite) Test23_RestoreActivityType() {
 	// Delete it
 	reqDel, _ := http.NewRequest("PATCH", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types/"+strconv.Itoa(typeID)+"/delete", nil)
 	reqDel.Header.Set("Authorization", "Bearer "+s.ownerToken)
-	client.Do(reqDel)
+	respDel, delErr := client.Do(reqDel)
+	s.NoError(delErr)
+	if delErr != nil {
+		return
+	}
+	defer respDel.Body.Close()
+	s.Equal(http.StatusNoContent, respDel.StatusCode)
 
 	// Restore it
 	reqRestore, _ := http.NewRequest("PATCH", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types/"+strconv.Itoa(typeID)+"/restore", nil)
 	reqRestore.Header.Set("Authorization", "Bearer "+s.ownerToken)
 	respRestore, restoreErr := client.Do(reqRestore)
 	s.NoError(restoreErr)
+	if restoreErr != nil {
+		return
+	}
 	defer respRestore.Body.Close()
 	s.Equal(http.StatusNoContent, respRestore.StatusCode)
 }
@@ -134,4 +155,109 @@ func (s *E2ETestSuite) Test24_CreateActivityType_DuplicateName() {
 	s.NoError(err2)
 	defer resp2.Body.Close()
 	s.Equal(http.StatusBadRequest, resp2.StatusCode)
+}
+
+func (s *E2ETestSuite) Test25_InvalidValueType() {
+	body := map[string]interface{}{
+		"name":        "invalid_type",
+		"value_type":  "unknown",
+		"aggregation": "sum",
+	}
+	jsonBody, _ := json.Marshal(body)
+	req, _ := http.NewRequest("POST", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types", bytes.NewBuffer(jsonBody))
+	req.Header.Set("Authorization", "Bearer "+s.ownerToken)
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	s.NoError(err)
+	defer resp.Body.Close()
+	s.Equal(http.StatusBadRequest, resp.StatusCode)
+}
+
+func (s *E2ETestSuite) Test26_InvalidAggregation() {
+	body := map[string]interface{}{
+		"name":        "invalid_agg",
+		"value_type":  "float",
+		"aggregation": "sum_everything",
+	}
+	jsonBody, _ := json.Marshal(body)
+	req, _ := http.NewRequest("POST", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types", bytes.NewBuffer(jsonBody))
+	req.Header.Set("Authorization", "Bearer "+s.ownerToken)
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	s.NoError(err)
+	defer resp.Body.Close()
+	s.Equal(http.StatusBadRequest, resp.StatusCode)
+}
+
+func (s *E2ETestSuite) Test27_TimeWithNullUnit_Valid() {
+	body := map[string]interface{}{
+		"name":        "sleep_duration",
+		"value_type":  "time",
+		"aggregation": "sum",
+		"unit":        nil,
+	}
+	jsonBody, _ := json.Marshal(body)
+	req, _ := http.NewRequest("POST", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types", bytes.NewBuffer(jsonBody))
+	req.Header.Set("Authorization", "Bearer "+s.ownerToken)
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	s.NoError(err)
+	defer resp.Body.Close()
+	s.Equal(http.StatusCreated, resp.StatusCode)
+}
+
+func (s *E2ETestSuite) Test28_TimeWithUnit_Invalid() {
+	unit := "minutes"
+	body := map[string]interface{}{
+		"name":        "sleep_with_unit",
+		"value_type":  "time",
+		"aggregation": "sum",
+		"unit":        unit,
+	}
+	jsonBody, _ := json.Marshal(body)
+	req, _ := http.NewRequest("POST", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types", bytes.NewBuffer(jsonBody))
+	req.Header.Set("Authorization", "Bearer "+s.ownerToken)
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	s.NoError(err)
+	defer resp.Body.Close()
+	s.Equal(http.StatusBadRequest, resp.StatusCode)
+}
+
+func (s *E2ETestSuite) Test29_BooleanWithInvalidAggregation() {
+	body := map[string]interface{}{
+		"name":        "bool_avg",
+		"value_type":  "boolean",
+		"aggregation": "avg",
+	}
+	jsonBody, _ := json.Marshal(body)
+	req, _ := http.NewRequest("POST", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types", bytes.NewBuffer(jsonBody))
+	req.Header.Set("Authorization", "Bearer "+s.ownerToken)
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	s.NoError(err)
+	defer resp.Body.Close()
+	s.Equal(http.StatusBadRequest, resp.StatusCode)
+}
+
+func (s *E2ETestSuite) Test30_TextWithInvalidAggregation() {
+	body := map[string]interface{}{
+		"name":        "text_invalid_agg",
+		"value_type":  "text",
+		"aggregation": "sum",
+	}
+	jsonBody, _ := json.Marshal(body)
+	req, _ := http.NewRequest("POST", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types", bytes.NewBuffer(jsonBody))
+	req.Header.Set("Authorization", "Bearer "+s.ownerToken)
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	s.NoError(err)
+	defer resp.Body.Close()
+	s.Equal(http.StatusBadRequest, resp.StatusCode)
 }
