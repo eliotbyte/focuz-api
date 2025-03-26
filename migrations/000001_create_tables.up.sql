@@ -88,3 +88,14 @@ CREATE TABLE activity_types (
     modified_at TIMESTAMP NOT NULL DEFAULT NOW(),
     UNIQUE (name, space_id)
 );
+
+CREATE TABLE activities (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    type_id INTEGER NOT NULL REFERENCES activity_types(id),
+    value JSONB NOT NULL,
+    note_id INTEGER REFERENCES note(id),
+    is_deleted BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    modified_at TIMESTAMP NOT NULL DEFAULT NOW()
+);

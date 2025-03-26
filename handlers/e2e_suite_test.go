@@ -29,8 +29,13 @@ func (s *E2ETestSuite) getGuestUserID() int {
 	req, _ := http.NewRequest("POST", s.baseURL+"/login", bytes.NewBuffer([]byte(body)))
 	req.Header.Set("Content-Type", "application/json")
 	client := &http.Client{}
-	resp, _ := client.Do(req)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0
+	}
 	defer resp.Body.Close()
+
 	var data map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&data)
 	if data["token"] == nil {

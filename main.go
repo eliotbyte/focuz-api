@@ -66,11 +66,19 @@ func main() {
 	notesRepo := repository.NewNotesRepository(db)
 	rolesRepo := repository.NewRolesRepository(db)
 	activityTypesRepo := repository.NewActivityTypesRepository(db)
+	activitiesRepo := repository.NewActivitiesRepository(db)
 
 	notesHandler := handlers.NewNotesHandler(notesRepo, spacesRepo, topicsRepo)
 	spacesHandler := handlers.NewSpacesHandler(spacesRepo, rolesRepo)
 	topicsHandler := handlers.NewTopicsHandler(topicsRepo, spacesRepo)
 	activityTypesHandler := handlers.NewActivityTypesHandler(activityTypesRepo, spacesRepo)
+	activitiesHandler := handlers.NewActivitiesHandler(
+		activitiesRepo,
+		spacesRepo,
+		topicsRepo,
+		notesRepo,
+		activityTypesRepo,
+	)
 
 	r := gin.Default()
 
@@ -107,6 +115,11 @@ func main() {
 		auth.POST("/spaces/:spaceId/activity-types", activityTypesHandler.CreateActivityType)
 		auth.PATCH("/spaces/:spaceId/activity-types/:typeId/delete", activityTypesHandler.DeleteActivityType)
 		auth.PATCH("/spaces/:spaceId/activity-types/:typeId/restore", activityTypesHandler.RestoreActivityType)
+
+		auth.POST("/activities", activitiesHandler.CreateActivity)
+		auth.PATCH("/activities/:activityId/delete", activitiesHandler.DeleteActivity)
+		auth.PATCH("/activities/:activityId/restore", activitiesHandler.RestoreActivity)
+		auth.PATCH("/activities/:activityId", activitiesHandler.UpdateActivity)
 	}
 
 	r.Run(":8080")

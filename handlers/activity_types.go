@@ -96,8 +96,7 @@ func (h *ActivityTypesHandler) CreateActivityType(c *gin.Context) {
 		return
 	}
 
-	var spacePtr *int
-	spacePtr = &spaceID
+	spacePtr := &spaceID
 	created, err := h.repo.CreateActivityType(
 		req.Name,
 		req.ValueType,
