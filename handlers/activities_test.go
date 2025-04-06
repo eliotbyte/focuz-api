@@ -216,11 +216,9 @@ func (s *E2ETestSuite) Test45_CreateActivityInaccessibleNote() {
 	_ = newSpaceID
 }
 
-// NEW TEST
 func (s *E2ETestSuite) Test46_GetActivitiesAnalysis() {
 	client := &http.Client{}
 
-	// Create notes with date
 	now := time.Now().AddDate(0, 0, -1)
 	yesterday := now.Format(time.RFC3339)
 	reqBody1 := map[string]interface{}{
@@ -232,13 +230,13 @@ func (s *E2ETestSuite) Test46_GetActivitiesAnalysis() {
 	reqN1, _ := http.NewRequest("POST", s.baseURL+"/notes", bytes.NewBuffer(b1))
 	reqN1.Header.Set("Authorization", "Bearer "+s.ownerToken)
 	reqN1.Header.Set("Content-Type", "application/json")
-	respN1, _ := client.Do(reqN1)
+	respN1, err := client.Do(reqN1)
+	s.Require().NoError(err)
 	defer respN1.Body.Close()
 	var nd1 map[string]interface{}
 	json.NewDecoder(respN1.Body).Decode(&nd1)
 	note1ID := int(nd1["id"].(float64))
 
-	// Create activity "mood=8" for note1
 	actReq1 := map[string]interface{}{
 		"typeId":  1,
 		"value":   "8",
@@ -250,7 +248,6 @@ func (s *E2ETestSuite) Test46_GetActivitiesAnalysis() {
 	reqA1.Header.Set("Content-Type", "application/json")
 	client.Do(reqA1)
 
-	// Another note for "today"
 	reqBody2 := map[string]interface{}{
 		"text":    "Mood note 2",
 		"topicId": s.createdTopicID,
@@ -260,13 +257,13 @@ func (s *E2ETestSuite) Test46_GetActivitiesAnalysis() {
 	reqN2, _ := http.NewRequest("POST", s.baseURL+"/notes", bytes.NewBuffer(b2))
 	reqN2.Header.Set("Authorization", "Bearer "+s.ownerToken)
 	reqN2.Header.Set("Content-Type", "application/json")
-	respN2, _ := client.Do(reqN2)
+	respN2, err := client.Do(reqN2)
+	s.Require().NoError(err)
 	defer respN2.Body.Close()
 	var nd2 map[string]interface{}
 	json.NewDecoder(respN2.Body).Decode(&nd2)
 	note2ID := int(nd2["id"].(float64))
 
-	// Create activity "mood=6" for note2
 	actReq2 := map[string]interface{}{
 		"typeId":  1,
 		"value":   "6",
@@ -278,7 +275,6 @@ func (s *E2ETestSuite) Test46_GetActivitiesAnalysis() {
 	reqA2.Header.Set("Content-Type", "application/json")
 	client.Do(reqA2)
 
-	// GET /activities?spaceId=...&typeId=1&aggregationPeriod=day
 	url := s.baseURL + "/activities?spaceId=" + strconv.Itoa(s.createdSpaceID) + "&typeId=1&aggregationPeriod=day"
 	r, _ := http.NewRequest("GET", url, nil)
 	r.Header.Set("Authorization", "Bearer "+s.ownerToken)
@@ -290,4 +286,68 @@ func (s *E2ETestSuite) Test46_GetActivitiesAnalysis() {
 	var analysis []map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&analysis)
 	s.True(len(analysis) >= 1)
+}
+
+func (s *E2ETestSuite) Test47_CannotCreateDuplicateActivityOnSameNote() {
+	actReq := map[string]interface{}{
+		"typeId":  1,
+		"value":   "2",
+		"note_id": s.createdNoteID,
+	}
+	actJSON, _ := json.Marshal(actReq)
+	client := &http.Client{}
+
+	req1, _ := http.NewRequest("POST", s.baseURL+"/activities", bytes.NewBuffer(actJSON))
+	req1.Header.Set("Authorization", "Bearer "+s.ownerToken)
+	req1.Header.Set("Content-Type", "application/json")
+	resp1, err1 := client.Do(req1)
+	s.NoError(err1)
+	defer resp1.Body.Close()
+	s.Equal(http.StatusCreated, resp1.StatusCode)
+
+	req2, _ := http.NewRequest("POST", s.baseURL+"/activities", bytes.NewBuffer(actJSON))
+	req2.Header.Set("Authorization", "Bearer "+s.ownerToken)
+	req2.Header.Set("Content-Type", "application/json")
+	resp2, err2 := client.Do(req2)
+	s.NoError(err2)
+	defer resp2.Body.Close()
+	s.Equal(http.StatusBadRequest, resp2.StatusCode)
+}
+
+func (s *E2ETestSuite) Test48_CanCreateActivityWhenExistingIsDeleted() {
+	client := &http.Client{}
+
+	actReq := map[string]interface{}{
+		"typeId":  1,
+		"value":   "4",
+		"note_id": s.createdNoteID,
+	}
+	actJSON, _ := json.Marshal(actReq)
+
+	reqCreate, _ := http.NewRequest("POST", s.baseURL+"/activities", bytes.NewBuffer(actJSON))
+	reqCreate.Header.Set("Authorization", "Bearer "+s.ownerToken)
+	reqCreate.Header.Set("Content-Type", "application/json")
+	respCreate, errCreate := client.Do(reqCreate)
+	s.NoError(errCreate)
+	defer respCreate.Body.Close()
+	s.Equal(http.StatusCreated, respCreate.StatusCode)
+
+	var data map[string]interface{}
+	json.NewDecoder(respCreate.Body).Decode(&data)
+	activityID := int(data["id"].(float64))
+
+	reqDel, _ := http.NewRequest("PATCH", s.baseURL+"/activities/"+strconv.Itoa(activityID)+"/delete", nil)
+	reqDel.Header.Set("Authorization", "Bearer "+s.ownerToken)
+	respDel, errDel := client.Do(reqDel)
+	s.NoError(errDel)
+	defer respDel.Body.Close()
+	s.Equal(http.StatusNoContent, respDel.StatusCode)
+
+	reqCreate2, _ := http.NewRequest("POST", s.baseURL+"/activities", bytes.NewBuffer(actJSON))
+	reqCreate2.Header.Set("Authorization", "Bearer "+s.ownerToken)
+	reqCreate2.Header.Set("Content-Type", "application/json")
+	respCreate2, errCreate2 := client.Do(reqCreate2)
+	s.NoError(errCreate2)
+	defer respCreate2.Body.Close()
+	s.Equal(http.StatusCreated, respCreate2.StatusCode)
 }

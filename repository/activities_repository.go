@@ -18,6 +18,22 @@ func NewActivitiesRepository(db *sql.DB) *ActivitiesRepository {
 }
 
 func (r *ActivitiesRepository) CreateActivity(userID, typeID int, value []byte, noteID *int) (*models.Activity, error) {
+	if noteID != nil {
+		var exists int
+		err := r.db.QueryRow(`
+			SELECT 1
+			FROM activities
+			WHERE note_id = $1
+			  AND type_id = $2
+			  AND is_deleted = FALSE
+		`, noteID, typeID).Scan(&exists)
+		if err != sql.ErrNoRows {
+			if err == nil {
+				return nil, errors.New("activity with this type already exists for the given note")
+			}
+			return nil, err
+		}
+	}
 	var newID int
 	now := time.Now()
 	err := r.db.QueryRow(`
@@ -84,7 +100,6 @@ func (r *ActivitiesRepository) SetActivityDeleted(id int, isDeleted bool) error 
 	return err
 }
 
-// NEW METHOD
 func (r *ActivitiesRepository) GetActivitiesAnalysis(
 	spaceID int,
 	topicID *int,
