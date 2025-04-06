@@ -68,6 +68,7 @@ func (r *NotesRepository) CreateNote(userID int, text string, tags []string, par
 	} else {
 		noteDate = time.Now()
 	}
+
 	var noteID int
 	err = tx.QueryRow(`
 		INSERT INTO note (user_id, text, created_at, modified_at, date, parent_id, topic_id)
@@ -77,6 +78,7 @@ func (r *NotesRepository) CreateNote(userID int, text string, tags []string, par
 	if err != nil {
 		return nil, err
 	}
+
 	for _, tagName := range tags {
 		var tagID int
 		err = tx.QueryRow(`
@@ -96,6 +98,7 @@ func (r *NotesRepository) CreateNote(userID int, text string, tags []string, par
 			return nil, err
 		}
 	}
+
 	if parentID != nil {
 		_, err = tx.Exec(`
 			UPDATE note SET reply_count = reply_count + 1
@@ -105,6 +108,7 @@ func (r *NotesRepository) CreateNote(userID int, text string, tags []string, par
 			return nil, err
 		}
 	}
+
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
@@ -123,6 +127,7 @@ func (r *NotesRepository) GetNoteByID(id int) (*models.Note, error) {
 	var note models.Note
 	var parentID sql.NullInt64
 	var parentText sql.NullString
+
 	err := r.db.QueryRow(`
 		SELECT n.id, n.user_id, n.text, n.created_at, n.modified_at, n.date,
 		       n.parent_id, n.reply_count, n.is_deleted, n.topic_id,
@@ -149,12 +154,14 @@ func (r *NotesRepository) GetNoteByID(id int) (*models.Note, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if parentID.Valid {
 		note.Parent = &models.ParentNote{
 			ID:   int(parentID.Int64),
 			Text: truncate(parentText.String, 20),
 		}
 	}
+
 	tagRows, err := r.db.Query(`
 		SELECT t.name FROM tag t
 		JOIN note_to_tag nt ON t.id = nt.tag_id
@@ -171,18 +178,34 @@ func (r *NotesRepository) GetNoteByID(id int) (*models.Note, error) {
 		}
 		note.Tags = append(note.Tags, tag)
 	}
+
+	activities, err := r.getActivitiesForNote(note.ID)
+	if err != nil {
+		return nil, err
+	}
+	note.Activities = activities
+
 	return &note, nil
 }
 
-func (r *NotesRepository) GetNotes(userID, spaceID int, topicID *int, includeTags, excludeTags []string, notReply bool, page, pageSize int) ([]*models.Note, int, error) {
+func (r *NotesRepository) GetNotes(
+	userID, spaceID int,
+	topicID *int,
+	includeTags, excludeTags []string,
+	notReply bool,
+	page, pageSize int,
+) ([]*models.Note, int, error) {
+
 	offset := (page - 1) * pageSize
 	var conditions []string
 	var params []interface{}
 	idx := 1
+
 	conditions = append(conditions, "n.is_deleted = FALSE")
 	conditions = append(conditions, "t.space_id = $"+strconv.Itoa(idx))
 	params = append(params, spaceID)
 	idx++
+
 	if topicID != nil {
 		conditions = append(conditions, "n.topic_id = $"+strconv.Itoa(idx))
 		params = append(params, *topicID)
@@ -191,6 +214,7 @@ func (r *NotesRepository) GetNotes(userID, spaceID int, topicID *int, includeTag
 	if notReply {
 		conditions = append(conditions, "n.parent_id IS NULL")
 	}
+
 	query := `
 		SELECT n.id, n.user_id, n.text, n.created_at, n.modified_at, n.date, 
 		       n.parent_id, n.reply_count, n.is_deleted, n.topic_id
@@ -225,7 +249,8 @@ func (r *NotesRepository) GetNotes(userID, spaceID int, topicID *int, includeTag
 	for rows.Next() {
 		var note models.Note
 		var parentID sql.NullInt64
-		if err := rows.Scan(
+
+		err := rows.Scan(
 			&note.ID,
 			&note.UserID,
 			&note.Text,
@@ -236,9 +261,11 @@ func (r *NotesRepository) GetNotes(userID, spaceID int, topicID *int, includeTag
 			&note.ReplyCount,
 			&note.IsDeleted,
 			&note.TopicID,
-		); err != nil {
+		)
+		if err != nil {
 			return nil, 0, err
 		}
+
 		if parentID.Valid {
 			parent, _ := r.GetNoteByID(int(parentID.Int64))
 			if parent != nil {
@@ -248,6 +275,7 @@ func (r *NotesRepository) GetNotes(userID, spaceID int, topicID *int, includeTag
 				}
 			}
 		}
+
 		tRows, err := r.db.Query(`
 			SELECT t.name FROM tag t
 			JOIN note_to_tag nt ON t.id = nt.tag_id
@@ -264,6 +292,13 @@ func (r *NotesRepository) GetNotes(userID, spaceID int, topicID *int, includeTag
 			}
 			note.Tags = append(note.Tags, tg)
 		}
+
+		activities, err := r.getActivitiesForNote(note.ID)
+		if err != nil {
+			return nil, 0, err
+		}
+		note.Activities = activities
+
 		notes = append(notes, &note)
 	}
 
@@ -287,11 +322,39 @@ func (r *NotesRepository) GetNotes(userID, spaceID int, topicID *int, includeTag
 			countQuery += " AND NOT EXISTS (SELECT 1 FROM note_to_tag xnt INNER JOIN tag xt ON xt.id = xnt.tag_id WHERE xnt.note_id = n.id AND xt.name = '" + exTag + "')"
 		}
 	}
+
 	err = r.db.QueryRow(countQuery, params[:len(params)-2]...).Scan(&total)
 	if err != nil {
 		return nil, 0, err
 	}
+
 	return notes, total, nil
+}
+
+func (r *NotesRepository) getActivitiesForNote(noteID int) ([]models.NoteActivity, error) {
+	rows, err := r.db.Query(`
+		SELECT a.id, a.type_id, a.value->>'data', at.unit
+		FROM activities a
+		JOIN activity_types at ON a.type_id = at.id
+		WHERE a.note_id = $1
+		  AND a.is_deleted = FALSE
+	`, noteID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []models.NoteActivity
+	for rows.Next() {
+		var item models.NoteActivity
+		var val string
+		if err := rows.Scan(&item.ID, &item.TypeID, &val, &item.Unit); err != nil {
+			return nil, err
+		}
+		item.Value = val
+		result = append(result, item)
+	}
+	return result, nil
 }
 
 func joinConditions(conds []string, sep string) string {
