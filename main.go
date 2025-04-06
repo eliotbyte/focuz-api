@@ -120,6 +120,8 @@ func main() {
 		auth.PATCH("/activities/:activityId/delete", activitiesHandler.DeleteActivity)
 		auth.PATCH("/activities/:activityId/restore", activitiesHandler.RestoreActivity)
 		auth.PATCH("/activities/:activityId", activitiesHandler.UpdateActivity)
+
+		auth.GET("/activities", activitiesHandler.GetActivitiesAnalysis)
 	}
 
 	r.Run(":8080")

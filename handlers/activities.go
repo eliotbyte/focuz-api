@@ -256,6 +256,21 @@ func (h *ActivitiesHandler) UpdateActivity(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+func (h *ActivitiesHandler) getSpaceIDForActivity(activity *models.Activity) (int, error) {
+	if activity.NoteID == nil {
+		return 0, nil
+	}
+	note, err := h.notesRepo.GetNoteByID(*activity.NoteID)
+	if err != nil || note == nil || note.IsDeleted {
+		return 0, errors.New("invalid note")
+	}
+	topic, err := h.topicsRepo.GetTopicByID(note.TopicID)
+	if err != nil || topic == nil || topic.IsDeleted {
+		return 0, errors.New("invalid topic")
+	}
+	return topic.SpaceID, nil
+}
+
 func (h *ActivitiesHandler) validateActivityValue(t *models.ActivityType, raw string) ([]byte, error) {
 	if strings.TrimSpace(raw) == "" {
 		return nil, errors.New("empty value")
@@ -309,17 +324,96 @@ func (h *ActivitiesHandler) validateActivityValue(t *models.ActivityType, raw st
 	}
 }
 
-func (h *ActivitiesHandler) getSpaceIDForActivity(activity *models.Activity) (int, error) {
-	if activity.NoteID == nil {
-		return 0, nil
+// NEW
+func (h *ActivitiesHandler) GetActivitiesAnalysis(c *gin.Context) {
+	spaceIDStr := c.Query("spaceId")
+	typeIDStr := c.Query("typeId")
+	if spaceIDStr == "" || typeIDStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "spaceId and typeId are required"})
+		return
 	}
-	note, err := h.notesRepo.GetNoteByID(*activity.NoteID)
-	if err != nil || note == nil || note.IsDeleted {
-		return 0, errors.New("invalid note")
+	spaceID, err := strconv.Atoi(spaceIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid spaceId"})
+		return
 	}
-	topic, err := h.topicsRepo.GetTopicByID(note.TopicID)
-	if err != nil || topic == nil || topic.IsDeleted {
-		return 0, errors.New("invalid topic")
+	typeID, err := strconv.Atoi(typeIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid typeId"})
+		return
 	}
-	return topic.SpaceID, nil
+	userID := c.GetInt("userId")
+	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, spaceID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if roleID == 0 {
+		c.JSON(http.StatusForbidden, gin.H{"error": "No access to this space"})
+		return
+	}
+	at, err := h.activityTypesRepo.GetActivityTypeByID(typeID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if at == nil || at.IsDeleted {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid activity type"})
+		return
+	}
+	topicIDStr := c.Query("topicId")
+	var topicID *int
+	if topicIDStr != "" {
+		tmp, e2 := strconv.Atoi(topicIDStr)
+		if e2 == nil {
+			topicID = &tmp
+		}
+	}
+	startDateStr := c.Query("startDate")
+	var startDate *time.Time
+	if startDateStr != "" {
+		t, e := time.Parse(time.RFC3339, startDateStr)
+		if e == nil {
+			startDate = &t
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid startDate"})
+			return
+		}
+	}
+	endDateStr := c.Query("endDate")
+	var endDate *time.Time
+	if endDateStr != "" {
+		t, e := time.Parse(time.RFC3339, endDateStr)
+		if e == nil {
+			endDate = &t
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid endDate"})
+			return
+		}
+	}
+	aggregationPeriod := c.Query("aggregationPeriod")
+	if aggregationPeriod == "" {
+		aggregationPeriod = "day"
+	}
+	validPeriods := map[string]bool{"day": true, "week": true, "month": true, "year": true}
+	if !validPeriods[aggregationPeriod] {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid aggregationPeriod"})
+		return
+	}
+	tags := c.QueryArray("tags")
+
+	results, err := h.activitiesRepo.GetActivitiesAnalysis(
+		spaceID,
+		topicID,
+		startDate,
+		endDate,
+		tags,
+		at,
+		aggregationPeriod,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, results)
 }

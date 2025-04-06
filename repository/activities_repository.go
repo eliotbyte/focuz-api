@@ -2,7 +2,10 @@ package repository
 
 import (
 	"database/sql"
+	"errors"
 	"focuz-api/models"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -79,4 +82,162 @@ func (r *ActivitiesRepository) SetActivityDeleted(id int, isDeleted bool) error 
 		WHERE id = $2
 	`, isDeleted, id)
 	return err
+}
+
+// NEW METHOD
+func (r *ActivitiesRepository) GetActivitiesAnalysis(
+	spaceID int,
+	topicID *int,
+	startDate, endDate *time.Time,
+	tags []string,
+	at *models.ActivityType,
+	period string,
+) ([]map[string]any, error) {
+
+	groupExpr, dateFormat := buildGroupExpression(period)
+	aggExpr, err := buildAggregatorExpression(at.ValueType, at.Aggregation)
+	if err != nil {
+		return nil, err
+	}
+
+	var joins []string
+	var conds []string
+	var params []interface{}
+	idx := 1
+
+	joins = append(joins, "JOIN activity_types aty ON a.type_id = aty.id")
+	joins = append(joins, "JOIN note n ON a.note_id = n.id")
+	joins = append(joins, "JOIN topic t ON n.topic_id = t.id")
+
+	conds = append(conds, "a.is_deleted = FALSE")
+	conds = append(conds, "aty.is_deleted = FALSE")
+	conds = append(conds, "n.is_deleted = FALSE")
+	conds = append(conds, "t.is_deleted = FALSE")
+	conds = append(conds, "t.space_id = $"+strconv.Itoa(idx))
+	params = append(params, spaceID)
+	idx++
+
+	conds = append(conds, "a.type_id = $"+strconv.Itoa(idx))
+	params = append(params, at.ID)
+	idx++
+
+	if topicID != nil {
+		conds = append(conds, "t.id = $"+strconv.Itoa(idx))
+		params = append(params, *topicID)
+		idx++
+	}
+	if startDate != nil {
+		conds = append(conds, "n.date >= $"+strconv.Itoa(idx))
+		params = append(params, *startDate)
+		idx++
+	}
+	if endDate != nil {
+		conds = append(conds, "n.date <= $"+strconv.Itoa(idx))
+		params = append(params, *endDate)
+		idx++
+	}
+	for _, tag := range tags {
+		tagAlias := "tg_" + strings.ReplaceAll(tag, " ", "_")
+		joins = append(joins, "JOIN note_to_tag nt_"+tagAlias+" ON nt_"+tagAlias+".note_id = n.id "+
+			"JOIN tag "+tagAlias+" ON "+tagAlias+".id = nt_"+tagAlias+".tag_id AND "+tagAlias+".name = '"+tag+"'")
+	}
+
+	sqlStr := `
+SELECT
+  to_char(` + groupExpr + `, '` + dateFormat + `') AS period,
+  ` + aggExpr + ` AS value
+FROM activities a
+`
+	for _, j := range joins {
+		sqlStr += j + "\n"
+	}
+	if len(conds) > 0 {
+		sqlStr += "WHERE " + strings.Join(conds, " AND ") + "\n"
+	}
+	sqlStr += "GROUP BY " + groupExpr + " ORDER BY " + groupExpr
+
+	rows, err := r.db.Query(sqlStr, params...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []map[string]any
+	for rows.Next() {
+		var periodStr string
+		var val float64
+		if err := rows.Scan(&periodStr, &val); err != nil {
+			return nil, err
+		}
+		results = append(results, map[string]any{
+			"period": periodStr,
+			"value":  val,
+		})
+	}
+	return results, nil
+}
+
+func buildGroupExpression(period string) (string, string) {
+	switch period {
+	case "week":
+		return "date_trunc('week', n.date)", "IYYY-\"W\"IW"
+	case "month":
+		return "date_trunc('month', n.date)", "YYYY-MM"
+	case "year":
+		return "date_trunc('year', n.date)", "YYYY"
+	default:
+		return "date_trunc('day', n.date)", "YYYY-MM-DD"
+	}
+}
+
+func buildAggregatorExpression(valueType, agg string) (string, error) {
+	v := strings.ToLower(valueType)
+	a := strings.ToLower(agg)
+	switch v {
+	case "integer", "float":
+		switch a {
+		case "sum":
+			return "SUM((a.value->>'data')::float)", nil
+		case "avg":
+			return "AVG((a.value->>'data')::float)", nil
+		case "count":
+			return "COUNT(*)::float", nil
+		case "min":
+			return "MIN((a.value->>'data')::float)", nil
+		case "max":
+			return "MAX((a.value->>'data')::float)", nil
+		}
+	case "boolean":
+		switch a {
+		case "and":
+			return "CASE WHEN bool_and((a.value->>'data')::boolean) THEN 1.0 ELSE 0.0 END", nil
+		case "or":
+			return "CASE WHEN bool_or((a.value->>'data')::boolean) THEN 1.0 ELSE 0.0 END", nil
+		case "count_true":
+			return "SUM(CASE WHEN (a.value->>'data')::boolean THEN 1 ELSE 0 END)::float", nil
+		case "count_false":
+			return "SUM(CASE WHEN NOT (a.value->>'data')::boolean THEN 1 ELSE 0 END)::float", nil
+		case "percentage_true":
+			return "AVG(CASE WHEN (a.value->>'data')::boolean THEN 1.0 ELSE 0.0 END)*100", nil
+		case "percentage_false":
+			return "AVG(CASE WHEN NOT (a.value->>'data')::boolean THEN 1.0 ELSE 0.0 END)*100", nil
+		}
+	case "text":
+		if a == "count" {
+			return "COUNT(*)::float", nil
+		}
+	case "time":
+		if a == "sum" {
+			return "EXTRACT(EPOCH FROM SUM((a.value->>'data')::interval))", nil
+		} else if a == "avg" {
+			return "EXTRACT(EPOCH FROM AVG((a.value->>'data')::interval))", nil
+		} else if a == "count" {
+			return "COUNT(*)::float", nil
+		} else if a == "min" {
+			return "EXTRACT(EPOCH FROM MIN((a.value->>'data')::interval))", nil
+		} else if a == "max" {
+			return "EXTRACT(EPOCH FROM MAX((a.value->>'data')::interval))", nil
+		}
+	}
+	return "", errors.New("unsupported aggregator for this value type")
 }
