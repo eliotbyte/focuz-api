@@ -61,12 +61,17 @@ func main() {
 		log.Fatal("Failed to initialize default data:", err)
 	}
 
+	if err := initializers.InitMinio(); err != nil {
+		log.Fatal("Failed to initialize Minio:", err)
+	}
+
 	spacesRepo := repository.NewSpacesRepository(db)
 	topicsRepo := repository.NewTopicsRepository(db)
 	notesRepo := repository.NewNotesRepository(db)
 	rolesRepo := repository.NewRolesRepository(db)
 	activityTypesRepo := repository.NewActivityTypesRepository(db)
 	activitiesRepo := repository.NewActivitiesRepository(db)
+	attachmentsRepo := repository.NewAttachmentsRepository(db)
 
 	notesHandler := handlers.NewNotesHandler(notesRepo, spacesRepo, topicsRepo)
 	spacesHandler := handlers.NewSpacesHandler(spacesRepo, rolesRepo)
@@ -79,6 +84,7 @@ func main() {
 		notesRepo,
 		activityTypesRepo,
 	)
+	attachmentsHandler := handlers.NewAttachmentsHandler(attachmentsRepo, notesRepo, spacesRepo, topicsRepo)
 
 	r := gin.Default()
 
@@ -122,6 +128,9 @@ func main() {
 		auth.PATCH("/activities/:activityId", activitiesHandler.UpdateActivity)
 
 		auth.GET("/activities", activitiesHandler.GetActivitiesAnalysis)
+
+		auth.POST("/upload", attachmentsHandler.UploadFile)
+		auth.GET("/files/:id", attachmentsHandler.GetFile)
 	}
 
 	r.Run(":8080")

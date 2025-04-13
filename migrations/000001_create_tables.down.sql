@@ -10,3 +10,4 @@ DROP TABLE IF EXISTS activity_type_category;
 DROP TABLE IF EXISTS space;
 DROP TABLE IF EXISTS role;
 DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS attachments;

@@ -99,3 +99,13 @@ CREATE TABLE activities (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     modified_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE attachments (
+    id VARCHAR(36) PRIMARY KEY,
+    note_id INTEGER NOT NULL REFERENCES note(id),
+    file_name VARCHAR(255) NOT NULL,
+    file_type VARCHAR(100) NOT NULL,
+    file_size BIGINT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    modified_at TIMESTAMP NOT NULL DEFAULT NOW()
+);

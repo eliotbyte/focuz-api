@@ -185,6 +185,22 @@ func (r *NotesRepository) GetNoteByID(id int) (*models.Note, error) {
 	}
 	note.Activities = activities
 
+	attRows, err := r.db.Query(`
+		SELECT id FROM attachments
+		WHERE note_id = $1
+	`, note.ID)
+	if err != nil {
+		return nil, err
+	}
+	defer attRows.Close()
+	for attRows.Next() {
+		var attID string
+		if err := attRows.Scan(&attID); err != nil {
+			return nil, err
+		}
+		note.AttachmentIDs = append(note.AttachmentIDs, attID)
+	}
+
 	return &note, nil
 }
 
@@ -284,20 +300,38 @@ func (r *NotesRepository) GetNotes(
 		if err != nil {
 			return nil, 0, err
 		}
-		defer tRows.Close()
 		for tRows.Next() {
 			var tg string
 			if err := tRows.Scan(&tg); err != nil {
+				tRows.Close()
 				return nil, 0, err
 			}
 			note.Tags = append(note.Tags, tg)
 		}
+		tRows.Close()
 
 		activities, err := r.getActivitiesForNote(note.ID)
 		if err != nil {
 			return nil, 0, err
 		}
 		note.Activities = activities
+
+		aRows, err := r.db.Query(`
+			SELECT id FROM attachments
+			WHERE note_id = $1
+		`, note.ID)
+		if err != nil {
+			return nil, 0, err
+		}
+		for aRows.Next() {
+			var attID string
+			if err := aRows.Scan(&attID); err != nil {
+				aRows.Close()
+				return nil, 0, err
+			}
+			note.AttachmentIDs = append(note.AttachmentIDs, attID)
+		}
+		aRows.Close()
 
 		notes = append(notes, &note)
 	}
