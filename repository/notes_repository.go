@@ -2,6 +2,7 @@ package repository
 
 import (
 	"database/sql"
+	"focuz-api/initializers"
 	"focuz-api/models"
 	"strconv"
 	"time"
@@ -56,7 +57,6 @@ func (r *NotesRepository) CreateNote(userID int, text string, tags []string, par
 		return nil, err
 	}
 	defer tx.Rollback()
-
 	var noteDate time.Time
 	if date != nil {
 		parsed, parseErr := time.Parse(time.RFC3339, *date)
@@ -68,7 +68,6 @@ func (r *NotesRepository) CreateNote(userID int, text string, tags []string, par
 	} else {
 		noteDate = time.Now()
 	}
-
 	var noteID int
 	err = tx.QueryRow(`
 		INSERT INTO note (user_id, text, created_at, modified_at, date, parent_id, topic_id)
@@ -78,7 +77,6 @@ func (r *NotesRepository) CreateNote(userID int, text string, tags []string, par
 	if err != nil {
 		return nil, err
 	}
-
 	for _, tagName := range tags {
 		var tagID int
 		err = tx.QueryRow(`
@@ -98,7 +96,6 @@ func (r *NotesRepository) CreateNote(userID int, text string, tags []string, par
 			return nil, err
 		}
 	}
-
 	if parentID != nil {
 		_, err = tx.Exec(`
 			UPDATE note SET reply_count = reply_count + 1
@@ -108,7 +105,6 @@ func (r *NotesRepository) CreateNote(userID int, text string, tags []string, par
 			return nil, err
 		}
 	}
-
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
@@ -127,7 +123,6 @@ func (r *NotesRepository) GetNoteByID(id int) (*models.Note, error) {
 	var note models.Note
 	var parentID sql.NullInt64
 	var parentText sql.NullString
-
 	err := r.db.QueryRow(`
 		SELECT n.id, n.user_id, n.text, n.created_at, n.modified_at, n.date,
 		       n.parent_id, n.reply_count, n.is_deleted, n.topic_id,
@@ -154,14 +149,12 @@ func (r *NotesRepository) GetNoteByID(id int) (*models.Note, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	if parentID.Valid {
 		note.Parent = &models.ParentNote{
 			ID:   int(parentID.Int64),
 			Text: truncate(parentText.String, 20),
 		}
 	}
-
 	tagRows, err := r.db.Query(`
 		SELECT t.name FROM tag t
 		JOIN note_to_tag nt ON t.id = nt.tag_id
@@ -178,50 +171,46 @@ func (r *NotesRepository) GetNoteByID(id int) (*models.Note, error) {
 		}
 		note.Tags = append(note.Tags, tag)
 	}
-
 	activities, err := r.getActivitiesForNote(note.ID)
 	if err != nil {
 		return nil, err
 	}
 	note.Activities = activities
-
 	attRows, err := r.db.Query(`
-		SELECT id FROM attachments
+		SELECT id, file_name, file_type, file_size
+		FROM attachments
 		WHERE note_id = $1
 	`, note.ID)
 	if err != nil {
 		return nil, err
 	}
 	defer attRows.Close()
+	var attachments []models.Attachment
 	for attRows.Next() {
-		var attID string
-		if err := attRows.Scan(&attID); err != nil {
+		var att models.Attachment
+		if err := attRows.Scan(&att.ID, &att.FileName, &att.FileType, &att.FileSize); err != nil {
 			return nil, err
 		}
-		note.AttachmentIDs = append(note.AttachmentIDs, attID)
+		url, err := initializers.GenerateAttachmentURL(att.ID, att.FileName)
+		if err != nil {
+			return nil, err
+		}
+		att.URL = url
+		attachments = append(attachments, att)
 	}
-
+	note.Attachments = attachments
 	return &note, nil
 }
 
-func (r *NotesRepository) GetNotes(
-	userID, spaceID int,
-	topicID *int,
-	includeTags, excludeTags []string,
-	notReply bool,
-	page, pageSize int,
-) ([]*models.Note, int, error) {
-
+func (r *NotesRepository) GetNotes(userID, spaceID int, topicID *int, includeTags, excludeTags []string, notReply bool, page, pageSize int) ([]*models.Note, int, error) {
 	offset := (page - 1) * pageSize
 	var conditions []string
 	var params []interface{}
 	idx := 1
-
 	conditions = append(conditions, "n.is_deleted = FALSE")
 	conditions = append(conditions, "t.space_id = $"+strconv.Itoa(idx))
 	params = append(params, spaceID)
 	idx++
-
 	if topicID != nil {
 		conditions = append(conditions, "n.topic_id = $"+strconv.Itoa(idx))
 		params = append(params, *topicID)
@@ -230,7 +219,6 @@ func (r *NotesRepository) GetNotes(
 	if notReply {
 		conditions = append(conditions, "n.parent_id IS NULL")
 	}
-
 	query := `
 		SELECT n.id, n.user_id, n.text, n.created_at, n.modified_at, n.date, 
 		       n.parent_id, n.reply_count, n.is_deleted, n.topic_id
@@ -254,18 +242,15 @@ func (r *NotesRepository) GetNotes(
 	query += " ORDER BY n.created_at DESC"
 	query += " LIMIT $" + strconv.Itoa(idx) + " OFFSET $" + strconv.Itoa(idx+1)
 	params = append(params, pageSize, offset)
-
 	rows, err := r.db.Query(query, params...)
 	if err != nil {
 		return nil, 0, err
 	}
 	defer rows.Close()
-
 	var notes []*models.Note
 	for rows.Next() {
 		var note models.Note
 		var parentID sql.NullInt64
-
 		err := rows.Scan(
 			&note.ID,
 			&note.UserID,
@@ -281,7 +266,6 @@ func (r *NotesRepository) GetNotes(
 		if err != nil {
 			return nil, 0, err
 		}
-
 		if parentID.Valid {
 			parent, _ := r.GetNoteByID(int(parentID.Int64))
 			if parent != nil {
@@ -291,7 +275,6 @@ func (r *NotesRepository) GetNotes(
 				}
 			}
 		}
-
 		tRows, err := r.db.Query(`
 			SELECT t.name FROM tag t
 			JOIN note_to_tag nt ON t.id = nt.tag_id
@@ -309,36 +292,41 @@ func (r *NotesRepository) GetNotes(
 			note.Tags = append(note.Tags, tg)
 		}
 		tRows.Close()
-
 		activities, err := r.getActivitiesForNote(note.ID)
 		if err != nil {
 			return nil, 0, err
 		}
 		note.Activities = activities
-
 		aRows, err := r.db.Query(`
-			SELECT id FROM attachments
+			SELECT id, file_name, file_type, file_size
+			FROM attachments
 			WHERE note_id = $1
 		`, note.ID)
 		if err != nil {
 			return nil, 0, err
 		}
+		var attachments []models.Attachment
 		for aRows.Next() {
-			var attID string
-			if err := aRows.Scan(&attID); err != nil {
+			var att models.Attachment
+			if err := aRows.Scan(&att.ID, &att.FileName, &att.FileType, &att.FileSize); err != nil {
 				aRows.Close()
 				return nil, 0, err
 			}
-			note.AttachmentIDs = append(note.AttachmentIDs, attID)
+			url, err := initializers.GenerateAttachmentURL(att.ID, att.FileName)
+			if err != nil {
+				aRows.Close()
+				return nil, 0, err
+			}
+			att.URL = url
+			attachments = append(attachments, att)
 		}
 		aRows.Close()
-
+		note.Attachments = attachments
 		notes = append(notes, &note)
 	}
-
 	var total int
 	countQuery := `
-		SELECT COUNT(n.id) 
+		SELECT COUNT(n.id)
 		FROM note n
 		INNER JOIN topic t ON n.topic_id = t.id
 	`
@@ -356,12 +344,10 @@ func (r *NotesRepository) GetNotes(
 			countQuery += " AND NOT EXISTS (SELECT 1 FROM note_to_tag xnt INNER JOIN tag xt ON xt.id = xnt.tag_id WHERE xnt.note_id = n.id AND xt.name = '" + exTag + "')"
 		}
 	}
-
 	err = r.db.QueryRow(countQuery, params[:len(params)-2]...).Scan(&total)
 	if err != nil {
 		return nil, 0, err
 	}
-
 	return notes, total, nil
 }
 
@@ -377,7 +363,6 @@ func (r *NotesRepository) getActivitiesForNote(noteID int) ([]models.NoteActivit
 		return nil, err
 	}
 	defer rows.Close()
-
 	var result []models.NoteActivity
 	for rows.Next() {
 		var item models.NoteActivity

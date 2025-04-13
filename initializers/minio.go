@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -110,4 +111,33 @@ func CheckFileAllowed(size int64, mime string) error {
 		return fmt.Errorf("file type is not allowed")
 	}
 	return nil
+}
+
+func GenerateAttachmentURL(id, fileName string) (string, error) {
+	reqParams := make(url.Values)
+	reqParams.Set("response-content-disposition", fmt.Sprintf("inline; filename=\"%s\"", sanitizeFilename(fileName)))
+	expiry := Conf.Expiry
+	endpoint := Conf.ExternalEndpoint
+	if strings.HasPrefix(endpoint, "http://") {
+		endpoint = strings.TrimPrefix(endpoint, "http://")
+	} else if strings.HasPrefix(endpoint, "https://") {
+		endpoint = strings.TrimPrefix(endpoint, "https://")
+	}
+	externalClient, err := minio.New(endpoint, &minio.Options{
+		Creds:  credentials.NewStaticV4(Conf.AccessKey, Conf.SecretKey, ""),
+		Secure: Conf.UseSSL,
+		Region: "us-east-1",
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to create external minio client: %v", err)
+	}
+	presignedURL, err := externalClient.PresignedGetObject(context.Background(), Conf.Bucket, id, expiry, reqParams)
+	if err != nil {
+		return "", fmt.Errorf("failed to create presigned url: %v", err)
+	}
+	return presignedURL.String(), nil
+}
+
+func sanitizeFilename(name string) string {
+	return strings.ReplaceAll(name, "\"", "")
 }
