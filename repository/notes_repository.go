@@ -202,8 +202,8 @@ func (r *NotesRepository) GetNoteByID(id int) (*models.Note, error) {
 	return &note, nil
 }
 
-func (r *NotesRepository) GetNotes(userID, spaceID int, topicID *int, includeTags, excludeTags []string, notReply bool, page, pageSize int, searchQuery *string) ([]*models.Note, int, error) {
-	offset := (page - 1) * pageSize
+func (r *NotesRepository) GetNotes(userID, spaceID int, topicID *int, filters models.NoteFilters) ([]*models.Note, int, error) {
+	offset := (filters.Page - 1) * filters.PageSize
 	var conditions []string
 	var params []interface{}
 	idx := 1
@@ -216,12 +216,16 @@ func (r *NotesRepository) GetNotes(userID, spaceID int, topicID *int, includeTag
 		params = append(params, *topicID)
 		idx++
 	}
-	if notReply {
+	if filters.ParentID != nil {
+		conditions = append(conditions, "n.parent_id = $"+strconv.Itoa(idx))
+		params = append(params, *filters.ParentID)
+		idx++
+	} else if filters.NotReply {
 		conditions = append(conditions, "n.parent_id IS NULL")
 	}
-	if searchQuery != nil && *searchQuery != "" {
+	if filters.SearchQuery != nil && *filters.SearchQuery != "" {
 		conditions = append(conditions, "n.text &@ $"+strconv.Itoa(idx))
-		params = append(params, *searchQuery)
+		params = append(params, *filters.SearchQuery)
 		idx++
 	}
 	query := `
@@ -230,8 +234,8 @@ func (r *NotesRepository) GetNotes(userID, spaceID int, topicID *int, includeTag
 		FROM note n
 		INNER JOIN topic t ON n.topic_id = t.id
 	`
-	if len(includeTags) > 0 {
-		for _, tagVal := range includeTags {
+	if len(filters.IncludeTags) > 0 {
+		for _, tagVal := range filters.IncludeTags {
 			query += " INNER JOIN note_to_tag nt_" + tagVal + " ON nt_" + tagVal + ".note_id = n.id " +
 				" INNER JOIN tag tg_" + tagVal + " ON tg_" + tagVal + ".id = nt_" + tagVal + ".tag_id AND tg_" + tagVal + ".name = '" + tagVal + "' "
 		}
@@ -239,14 +243,14 @@ func (r *NotesRepository) GetNotes(userID, spaceID int, topicID *int, includeTag
 	if len(conditions) > 0 {
 		query += " WHERE " + joinConditions(conditions, " AND ")
 	}
-	if len(excludeTags) > 0 {
-		for _, exTag := range excludeTags {
+	if len(filters.ExcludeTags) > 0 {
+		for _, exTag := range filters.ExcludeTags {
 			query += " AND NOT EXISTS (SELECT 1 FROM note_to_tag xnt INNER JOIN tag xt ON xt.id = xnt.tag_id WHERE xnt.note_id = n.id AND xt.name = '" + exTag + "')"
 		}
 	}
 	query += " ORDER BY n.created_at DESC"
 	query += " LIMIT $" + strconv.Itoa(idx) + " OFFSET $" + strconv.Itoa(idx+1)
-	params = append(params, pageSize, offset)
+	params = append(params, filters.PageSize, offset)
 	rows, err := r.db.Query(query, params...)
 	if err != nil {
 		return nil, 0, err
@@ -335,8 +339,8 @@ func (r *NotesRepository) GetNotes(userID, spaceID int, topicID *int, includeTag
 		FROM note n
 		INNER JOIN topic t ON n.topic_id = t.id
 	`
-	if len(includeTags) > 0 {
-		for _, tagVal := range includeTags {
+	if len(filters.IncludeTags) > 0 {
+		for _, tagVal := range filters.IncludeTags {
 			countQuery += " INNER JOIN note_to_tag nt_" + tagVal + " ON nt_" + tagVal + ".note_id = n.id " +
 				" INNER JOIN tag tg_" + tagVal + " ON tg_" + tagVal + ".id = nt_" + tagVal + ".tag_id AND tg_" + tagVal + ".name = '" + tagVal + "' "
 		}
@@ -344,8 +348,8 @@ func (r *NotesRepository) GetNotes(userID, spaceID int, topicID *int, includeTag
 	if len(conditions) > 0 {
 		countQuery += " WHERE " + joinConditions(conditions, " AND ")
 	}
-	if len(excludeTags) > 0 {
-		for _, exTag := range excludeTags {
+	if len(filters.ExcludeTags) > 0 {
+		for _, exTag := range filters.ExcludeTags {
 			countQuery += " AND NOT EXISTS (SELECT 1 FROM note_to_tag xnt INNER JOIN tag xt ON xt.id = xnt.tag_id WHERE xnt.note_id = n.id AND xt.name = '" + exTag + "')"
 		}
 	}

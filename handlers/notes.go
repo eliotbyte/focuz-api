@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"focuz-api/models"
+
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
@@ -317,7 +319,24 @@ func (h *NotesHandler) GetNotes(c *gin.Context) {
 	if searchQuery != "" {
 		searchQueryPtr = &searchQuery
 	}
-	notes, total, err := h.repo.GetNotes(userID, spaceID, topicID, includeTags, excludeTags, notReply, page, pageSize, searchQueryPtr)
+	parentIDParam := c.Query("parentId")
+	var parentID *int
+	if parentIDParam != "" {
+		tmp, err := strconv.Atoi(parentIDParam)
+		if err == nil {
+			parentID = &tmp
+		}
+	}
+	filters := models.NoteFilters{
+		IncludeTags: includeTags,
+		ExcludeTags: excludeTags,
+		NotReply:    notReply,
+		Page:        page,
+		PageSize:    pageSize,
+		SearchQuery: searchQueryPtr,
+		ParentID:    parentID,
+	}
+	notes, total, err := h.repo.GetNotes(userID, spaceID, topicID, filters)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

@@ -37,3 +37,13 @@ type Attachment struct {
 	FileType string `json:"fileType"`
 	FileSize int64  `json:"fileSize"`
 }
+
+type NoteFilters struct {
+	IncludeTags []string `json:"includeTags"`
+	ExcludeTags []string `json:"excludeTags"`
+	NotReply    bool     `json:"notReply"`
+	Page        int      `json:"page"`
+	PageSize    int      `json:"pageSize"`
+	SearchQuery *string  `json:"searchQuery"`
+	ParentID    *int     `json:"parentId"`
+}
