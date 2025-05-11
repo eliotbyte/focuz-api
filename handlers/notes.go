@@ -312,7 +312,12 @@ func (h *NotesHandler) GetNotes(c *gin.Context) {
 	if strings.ToLower(notReplyParam) == "true" {
 		notReply = true
 	}
-	notes, total, err := h.repo.GetNotes(userID, spaceID, topicID, includeTags, excludeTags, notReply, page, pageSize)
+	searchQuery := c.Query("search")
+	var searchQueryPtr *string
+	if searchQuery != "" {
+		searchQueryPtr = &searchQuery
+	}
+	notes, total, err := h.repo.GetNotes(userID, spaceID, topicID, includeTags, excludeTags, notReply, page, pageSize, searchQueryPtr)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

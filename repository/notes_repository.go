@@ -202,7 +202,7 @@ func (r *NotesRepository) GetNoteByID(id int) (*models.Note, error) {
 	return &note, nil
 }
 
-func (r *NotesRepository) GetNotes(userID, spaceID int, topicID *int, includeTags, excludeTags []string, notReply bool, page, pageSize int) ([]*models.Note, int, error) {
+func (r *NotesRepository) GetNotes(userID, spaceID int, topicID *int, includeTags, excludeTags []string, notReply bool, page, pageSize int, searchQuery *string) ([]*models.Note, int, error) {
 	offset := (page - 1) * pageSize
 	var conditions []string
 	var params []interface{}
@@ -218,6 +218,11 @@ func (r *NotesRepository) GetNotes(userID, spaceID int, topicID *int, includeTag
 	}
 	if notReply {
 		conditions = append(conditions, "n.parent_id IS NULL")
+	}
+	if searchQuery != nil && *searchQuery != "" {
+		conditions = append(conditions, "n.text &@ $"+strconv.Itoa(idx))
+		params = append(params, *searchQuery)
+		idx++
 	}
 	query := `
 		SELECT n.id, n.user_id, n.text, n.created_at, n.modified_at, n.date, 

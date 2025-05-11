@@ -1,3 +1,5 @@
+CREATE EXTENSION IF NOT EXISTS pgroonga;
+
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     username VARCHAR(50) UNIQUE NOT NULL CHECK (LENGTH(username) >= 3 AND LENGTH(username) <= 50),
@@ -59,6 +61,8 @@ CREATE TABLE note (
     is_deleted BOOLEAN DEFAULT FALSE,
     topic_id INTEGER REFERENCES topic(id)
 );
+
+CREATE INDEX pgroonga_note_text_index ON note USING pgroonga (text);
 
 CREATE TABLE note_to_tag (
     id SERIAL PRIMARY KEY,
