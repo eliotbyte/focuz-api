@@ -21,6 +21,8 @@ go.work.sum
 # IDE directories
 .idea/
 .vscode/
+.cursor/
+.cursorrules
 
 # Directories for dependencies
 vendor/
