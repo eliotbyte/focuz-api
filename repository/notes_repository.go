@@ -123,12 +123,35 @@ func (r *NotesRepository) CreateNote(userID int, text string, tags []string, par
 	}
 
 	if parentID != nil {
-		_, err = tx.Exec(`
-			UPDATE note SET reply_count = reply_count + 1
-			WHERE id = $1
-		`, *parentID)
-		if err != nil {
-			return nil, err
+		// Get all parent IDs in the chain
+		var parentIDs []int
+		currentID := *parentID
+		for {
+			var parentID sql.NullInt64
+			err = tx.QueryRow(`
+				SELECT parent_id FROM note WHERE id = $1
+			`, currentID).Scan(&parentID)
+			if err != nil {
+				return nil, err
+			}
+
+			parentIDs = append(parentIDs, currentID)
+
+			if !parentID.Valid {
+				break
+			}
+			currentID = int(parentID.Int64)
+		}
+
+		// Update reply_count for all parents
+		for _, pid := range parentIDs {
+			_, err = tx.Exec(`
+				UPDATE note SET reply_count = reply_count + 1
+				WHERE id = $1
+			`, pid)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
