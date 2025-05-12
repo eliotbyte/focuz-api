@@ -248,7 +248,12 @@ func (r *NotesRepository) GetNotes(userID, spaceID int, topicID *int, filters mo
 			query += " AND NOT EXISTS (SELECT 1 FROM note_to_tag xnt INNER JOIN tag xt ON xt.id = xnt.tag_id WHERE xnt.note_id = n.id AND xt.name = '" + exTag + "')"
 		}
 	}
-	query += " ORDER BY n.created_at DESC"
+
+	sortField := "n.created_at"
+	if filters.SortField == "modifiedat" {
+		sortField = "n.modified_at"
+	}
+	query += " ORDER BY " + sortField + " " + filters.SortOrder
 	query += " LIMIT $" + strconv.Itoa(idx) + " OFFSET $" + strconv.Itoa(idx+1)
 	params = append(params, filters.PageSize, offset)
 	rows, err := r.db.Query(query, params...)

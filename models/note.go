@@ -46,4 +46,6 @@ type NoteFilters struct {
 	PageSize    int      `json:"pageSize"`
 	SearchQuery *string  `json:"searchQuery"`
 	ParentID    *int     `json:"parentId"`
+	SortField   string   `json:"sortField"`
+	SortOrder   string   `json:"sortOrder"`
 }

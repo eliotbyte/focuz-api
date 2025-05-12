@@ -329,6 +329,24 @@ func (h *NotesHandler) GetNotes(c *gin.Context) {
 			parentID = &tmp
 		}
 	}
+
+	sortParam := c.Query("sort")
+	sortField := "created_at"
+	sortOrder := "DESC"
+	if sortParam != "" {
+		parts := strings.Split(sortParam, ",")
+		if len(parts) == 2 {
+			field := strings.ToLower(parts[0])
+			order := strings.ToUpper(parts[1])
+			if field == "createdat" || field == "modifiedat" {
+				sortField = field
+				if order == "ASC" || order == "DESC" {
+					sortOrder = order
+				}
+			}
+		}
+	}
+
 	filters := models.NoteFilters{
 		IncludeTags: includeTags,
 		ExcludeTags: excludeTags,
@@ -337,6 +355,8 @@ func (h *NotesHandler) GetNotes(c *gin.Context) {
 		PageSize:    pageSize,
 		SearchQuery: searchQueryPtr,
 		ParentID:    parentID,
+		SortField:   sortField,
+		SortOrder:   sortOrder,
 	}
 	notes, total, err := h.repo.GetNotes(userID, spaceID, topicID, filters)
 	if err != nil {
