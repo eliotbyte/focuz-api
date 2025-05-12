@@ -1,0 +1,26 @@
+package models
+
+import "time"
+
+type Chart struct {
+	ID             int       `json:"id"`
+	UserID         int       `json:"userId"`
+	TopicID        int       `json:"topicId"`
+	KindID         int       `json:"kindId"`
+	ActivityTypeID int       `json:"activityTypeId"`
+	PeriodID       int       `json:"periodId"`
+	IsDeleted      bool      `json:"-"`
+	CreatedAt      time.Time `json:"createdAt"`
+	ModifiedAt     time.Time `json:"modifiedAt"`
+}
+
+type ChartDataPoint struct {
+	Date  time.Time `json:"date"`
+	Value float64   `json:"value"`
+}
+
+type ChartFilters struct {
+	Page     int  `json:"page"`
+	PageSize int  `json:"pageSize"`
+	TopicID  *int `json:"topicId"`
+}

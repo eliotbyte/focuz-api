@@ -72,6 +72,7 @@ func main() {
 	activityTypesRepo := repository.NewActivityTypesRepository(db)
 	activitiesRepo := repository.NewActivitiesRepository(db)
 	attachmentsRepo := repository.NewAttachmentsRepository(db)
+	chartsRepo := repository.NewChartsRepository(db)
 
 	notesHandler := handlers.NewNotesHandler(notesRepo, spacesRepo, topicsRepo)
 	spacesHandler := handlers.NewSpacesHandler(spacesRepo, rolesRepo)
@@ -85,6 +86,7 @@ func main() {
 		activityTypesRepo,
 	)
 	attachmentsHandler := handlers.NewAttachmentsHandler(attachmentsRepo, notesRepo, spacesRepo, topicsRepo)
+	chartsHandler := handlers.NewChartsHandler(chartsRepo, spacesRepo, topicsRepo, activityTypesRepo)
 
 	r := gin.Default()
 
@@ -110,12 +112,21 @@ func main() {
 		auth.PATCH("/topics/:id/delete", topicsHandler.DeleteTopic)
 		auth.PATCH("/topics/:id/restore", topicsHandler.RestoreTopic)
 		auth.GET("/spaces/:spaceId/topics", topicsHandler.GetTopicsBySpace)
+		auth.GET("/topic-types", topicsHandler.GetTopicTypes)
 
 		auth.POST("/notes", notesHandler.CreateNote)
 		auth.PATCH("/notes/:id/delete", notesHandler.DeleteNote)
 		auth.PATCH("/notes/:id/restore", notesHandler.RestoreNote)
 		auth.GET("/notes/:id", notesHandler.GetNote)
 		auth.GET("/notes", notesHandler.GetNotes)
+
+		auth.POST("/charts", chartsHandler.CreateChart)
+		auth.PATCH("/charts/:id/delete", chartsHandler.DeleteChart)
+		auth.PATCH("/charts/:id/restore", chartsHandler.RestoreChart)
+		auth.PATCH("/charts/:id", chartsHandler.UpdateChart)
+		auth.GET("/charts", chartsHandler.GetCharts)
+		auth.GET("/chart-types", chartsHandler.GetChartTypes)
+		auth.GET("/period-types", chartsHandler.GetPeriodTypes)
 
 		auth.GET("/spaces/:spaceId/activity-types", activityTypesHandler.GetActivityTypesBySpace)
 		auth.POST("/spaces/:spaceId/activity-types", activityTypesHandler.CreateActivityType)

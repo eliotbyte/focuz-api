@@ -5,6 +5,7 @@ import (
 	"errors"
 	"focuz-api/models"
 	"focuz-api/repository"
+	"focuz-api/types"
 	"net/http"
 	"strconv"
 	"strings"
@@ -328,8 +329,9 @@ func (h *ActivitiesHandler) validateActivityValue(t *models.ActivityType, raw st
 func (h *ActivitiesHandler) GetActivitiesAnalysis(c *gin.Context) {
 	spaceIDStr := c.Query("spaceId")
 	typeIDStr := c.Query("typeId")
-	if spaceIDStr == "" || typeIDStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "spaceId and typeId are required"})
+	periodIDStr := c.Query("periodId")
+	if spaceIDStr == "" || typeIDStr == "" || periodIDStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "spaceId, typeId and periodId are required"})
 		return
 	}
 	spaceID, err := strconv.Atoi(spaceIDStr)
@@ -342,6 +344,18 @@ func (h *ActivitiesHandler) GetActivitiesAnalysis(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid typeId"})
 		return
 	}
+	periodID, err := strconv.Atoi(periodIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid periodId"})
+		return
+	}
+
+	periodType := types.GetPeriodTypeByID(periodID)
+	if periodType == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid period type"})
+		return
+	}
+
 	userID := c.GetInt("userId")
 	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, spaceID)
 	if err != nil {
@@ -391,15 +405,6 @@ func (h *ActivitiesHandler) GetActivitiesAnalysis(c *gin.Context) {
 			return
 		}
 	}
-	aggregationPeriod := c.Query("aggregationPeriod")
-	if aggregationPeriod == "" {
-		aggregationPeriod = "day"
-	}
-	validPeriods := map[string]bool{"day": true, "week": true, "month": true, "year": true}
-	if !validPeriods[aggregationPeriod] {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid aggregationPeriod"})
-		return
-	}
 	tags := c.QueryArray("tags")
 
 	results, err := h.activitiesRepo.GetActivitiesAnalysis(
@@ -409,7 +414,7 @@ func (h *ActivitiesHandler) GetActivitiesAnalysis(c *gin.Context) {
 		endDate,
 		tags,
 		at,
-		aggregationPeriod,
+		periodID,
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

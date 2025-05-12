@@ -3,6 +3,7 @@ package handlers
 import (
 	"focuz-api/globals"
 	"focuz-api/repository"
+	"focuz-api/types"
 	"net/http"
 	"strconv"
 
@@ -18,6 +19,10 @@ func NewTopicsHandler(topicsRepo *repository.TopicsRepository, spacesRepo *repos
 	return &TopicsHandler{topicsRepo: topicsRepo, spacesRepo: spacesRepo}
 }
 
+func (h *TopicsHandler) GetTopicTypes(c *gin.Context) {
+	c.JSON(http.StatusOK, types.TopicTypes)
+}
+
 func (h *TopicsHandler) CreateTopic(c *gin.Context) {
 	var req struct {
 		SpaceID int    `json:"spaceId"`
@@ -28,6 +33,13 @@ func (h *TopicsHandler) CreateTopic(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
+	topicType := types.GetTopicTypeByID(req.TypeID)
+	if topicType == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid topic type"})
+		return
+	}
+
 	userID := c.GetInt("userId")
 	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, req.SpaceID)
 	if err != nil {

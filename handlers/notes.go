@@ -3,6 +3,7 @@ package handlers
 import (
 	"focuz-api/globals"
 	"focuz-api/repository"
+	"focuz-api/types"
 	"net/http"
 	"strconv"
 	"strings"
@@ -120,26 +121,28 @@ func (h *NotesHandler) Login(c *gin.Context) {
 
 func (h *NotesHandler) CreateNote(c *gin.Context) {
 	var req struct {
-		Text     string   `json:"text"`
-		Tags     []string `json:"tags"`
-		ParentID *int     `json:"parentId"`
-		Date     *string  `json:"date"`
-		TopicID  *int     `json:"topicId"`
+		Text    string    `json:"text"`
+		Date    time.Time `json:"date"`
+		TopicID int       `json:"topicId"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if req.TopicID == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "topicId is required"})
-		return
-	}
-	userID := c.GetInt("userId")
-	topic, err := h.topicsRepo.GetTopicByID(*req.TopicID)
+
+	topic, err := h.topicsRepo.GetTopicByID(req.TopicID)
 	if err != nil || topic == nil || topic.IsDeleted {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid topic"})
 		return
 	}
+
+	topicType := types.GetTopicTypeByID(topic.TypeID)
+	if topicType == nil || topicType.Name != "notebook" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Notes can only be created in notebook topics"})
+		return
+	}
+
+	userID := c.GetInt("userId")
 	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, topic.SpaceID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -149,15 +152,14 @@ func (h *NotesHandler) CreateNote(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "No access to the space"})
 		return
 	}
-	if topic.TypeID != globals.DefaultNotebookTypeID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Notes can only be created in notebook topics"})
-		return
-	}
-	note, err := h.repo.CreateNote(userID, req.Text, req.Tags, req.ParentID, req.Date, *req.TopicID)
+
+	dateStr := req.Date.Format(time.RFC3339)
+	note, err := h.repo.CreateNote(userID, req.Text, nil, nil, &dateStr, req.TopicID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
 	c.JSON(http.StatusCreated, note)
 }
 

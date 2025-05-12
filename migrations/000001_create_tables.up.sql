@@ -113,3 +113,18 @@ CREATE TABLE attachments (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     modified_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE chart (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    topic_id INTEGER NOT NULL REFERENCES topic(id),
+    kind VARCHAR(50) NOT NULL,
+    activity_type_id INTEGER NOT NULL REFERENCES activity_types(id),
+    period VARCHAR(50) NOT NULL,
+    is_deleted BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    modified_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- Insert dashboard topic type
+INSERT INTO topic_type (name) VALUES ('dashboard') ON CONFLICT (name) DO NOTHING;

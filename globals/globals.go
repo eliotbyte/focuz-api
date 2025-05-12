@@ -7,4 +7,5 @@ var (
 	DefaultFinanceCatID    int
 	DefaultNotebookTypeID  int
 	DefaultDashboardTypeID int
+	DashboardTopicTypeID   int
 )

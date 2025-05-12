@@ -38,6 +38,7 @@ func InitDefaults(db *sql.DB) error {
 	}
 	globals.DefaultNotebookTypeID = notebookID
 	globals.DefaultDashboardTypeID = dashboardID
+	globals.DashboardTopicTypeID = dashboardID
 
 	if _, err := ensureActivityType(db, "mood", "integer", 1.0, 10.0, "avg", nil, healthID, nil, true); err != nil {
 		return err

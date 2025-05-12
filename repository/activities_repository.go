@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"focuz-api/models"
+	"focuz-api/types"
 	"strconv"
 	"strings"
 	"time"
@@ -106,10 +107,15 @@ func (r *ActivitiesRepository) GetActivitiesAnalysis(
 	startDate, endDate *time.Time,
 	tags []string,
 	at *models.ActivityType,
-	period string,
+	periodID int,
 ) ([]map[string]any, error) {
 
-	groupExpr, dateFormat := buildGroupExpression(period)
+	periodType := types.GetPeriodTypeByID(periodID)
+	if periodType == nil {
+		return nil, errors.New("invalid period type")
+	}
+
+	groupExpr, dateFormat := buildGroupExpression(periodType.Name)
 	aggExpr, err := buildAggregatorExpression(at.ValueType, at.Aggregation)
 	if err != nil {
 		return nil, err
