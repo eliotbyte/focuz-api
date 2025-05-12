@@ -121,9 +121,11 @@ func (h *NotesHandler) Login(c *gin.Context) {
 
 func (h *NotesHandler) CreateNote(c *gin.Context) {
 	var req struct {
-		Text    string    `json:"text"`
-		Date    time.Time `json:"date"`
-		TopicID int       `json:"topicId"`
+		Text     string    `json:"text"`
+		Date     time.Time `json:"date"`
+		TopicID  int       `json:"topicId"`
+		Tags     []string  `json:"tags"`
+		ParentID *int      `json:"parentId"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -154,7 +156,7 @@ func (h *NotesHandler) CreateNote(c *gin.Context) {
 	}
 
 	dateStr := req.Date.Format(time.RFC3339)
-	note, err := h.repo.CreateNote(userID, req.Text, nil, nil, &dateStr, req.TopicID)
+	note, err := h.repo.CreateNote(userID, req.Text, req.Tags, req.ParentID, &dateStr, req.TopicID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -367,4 +369,40 @@ func (h *NotesHandler) GetNotes(c *gin.Context) {
 		"notes": notes,
 		"total": total,
 	})
+}
+
+func (h *NotesHandler) GetTagAutocomplete(c *gin.Context) {
+	text := c.Query("text")
+	spaceID, err := strconv.Atoi(c.Query("spaceId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid spaceId"})
+		return
+	}
+
+	userID := c.GetInt("userId")
+	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, spaceID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if roleID == 0 {
+		c.JSON(http.StatusForbidden, gin.H{"error": "No access to the space"})
+		return
+	}
+
+	var topicID *int
+	if topicIDStr := c.Query("topicId"); topicIDStr != "" {
+		tmp, err := strconv.Atoi(topicIDStr)
+		if err == nil {
+			topicID = &tmp
+		}
+	}
+
+	tags, err := h.repo.GetTagAutocomplete(text, spaceID, topicID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, tags)
 }

@@ -49,6 +49,15 @@ CREATE TABLE tag (
     name VARCHAR(255) UNIQUE NOT NULL
 );
 
+CREATE TABLE tag_to_space_topic (
+    id SERIAL PRIMARY KEY,
+    tag_id INTEGER NOT NULL REFERENCES tag(id),
+    space_id INTEGER NOT NULL REFERENCES space(id),
+    topic_id INTEGER REFERENCES topic(id),
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    UNIQUE (tag_id, space_id, topic_id)
+);
+
 CREATE TABLE note (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL REFERENCES users(id),

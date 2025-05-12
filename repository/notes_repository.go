@@ -57,6 +57,14 @@ func (r *NotesRepository) CreateNote(userID int, text string, tags []string, par
 		return nil, err
 	}
 	defer tx.Rollback()
+
+	// Get space_id for the topic
+	var spaceID int
+	err = tx.QueryRow("SELECT space_id FROM topic WHERE id = $1", topicID).Scan(&spaceID)
+	if err != nil {
+		return nil, err
+	}
+
 	var noteDate time.Time
 	if date != nil {
 		parsed, parseErr := time.Parse(time.RFC3339, *date)
@@ -68,6 +76,7 @@ func (r *NotesRepository) CreateNote(userID int, text string, tags []string, par
 	} else {
 		noteDate = time.Now()
 	}
+
 	var noteID int
 	err = tx.QueryRow(`
 		INSERT INTO note (user_id, text, created_at, modified_at, date, parent_id, topic_id)
@@ -77,25 +86,42 @@ func (r *NotesRepository) CreateNote(userID int, text string, tags []string, par
 	if err != nil {
 		return nil, err
 	}
-	for _, tagName := range tags {
-		var tagID int
-		err = tx.QueryRow(`
-			INSERT INTO tag (name) VALUES ($1)
-			ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
-			RETURNING id
-		`, tagName).Scan(&tagID)
-		if err != nil {
-			return nil, err
-		}
-		_, err = tx.Exec(`
-			INSERT INTO note_to_tag (note_id, tag_id)
-			VALUES ($1, $2)
-			ON CONFLICT DO NOTHING
-		`, noteID, tagID)
-		if err != nil {
-			return nil, err
+
+	// Process tags if provided
+	if tags != nil {
+		for _, tagName := range tags {
+			var tagID int
+			err = tx.QueryRow(`
+				INSERT INTO tag (name) VALUES ($1)
+				ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+				RETURNING id
+			`, tagName).Scan(&tagID)
+			if err != nil {
+				return nil, err
+			}
+
+			// Create note_to_tag entry
+			_, err = tx.Exec(`
+				INSERT INTO note_to_tag (note_id, tag_id)
+				VALUES ($1, $2)
+				ON CONFLICT DO NOTHING
+			`, noteID, tagID)
+			if err != nil {
+				return nil, err
+			}
+
+			// Create tag_to_space_topic entry
+			_, err = tx.Exec(`
+				INSERT INTO tag_to_space_topic (tag_id, space_id, topic_id)
+				VALUES ($1, $2, $3)
+				ON CONFLICT (tag_id, space_id, topic_id) DO NOTHING
+			`, tagID, spaceID, topicID)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
+
 	if parentID != nil {
 		_, err = tx.Exec(`
 			UPDATE note SET reply_count = reply_count + 1
@@ -105,10 +131,18 @@ func (r *NotesRepository) CreateNote(userID int, text string, tags []string, par
 			return nil, err
 		}
 	}
+
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
-	return r.GetNoteByID(noteID)
+
+	// Get the complete note with tags
+	note, err := r.GetNoteByID(noteID)
+	if err != nil {
+		return nil, err
+	}
+
+	return note, nil
 }
 
 func (r *NotesRepository) UpdateNoteDeleted(id int, isDeleted bool) error {
@@ -407,4 +441,46 @@ func truncate(s string, max int) string {
 		return s[:max]
 	}
 	return s
+}
+
+type TagAutocomplete struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+func (r *NotesRepository) GetTagAutocomplete(text string, spaceID int, topicID *int) ([]TagAutocomplete, error) {
+	query := `
+		WITH ranked_tags AS (
+			SELECT 
+				t.id,
+				t.name,
+				CASE 
+					WHEN tst.topic_id = $3 THEN 0
+					ELSE 1
+				END as rank
+			FROM tag t
+			JOIN tag_to_space_topic tst ON t.id = tst.tag_id
+			WHERE tst.space_id = $1
+			AND ($2 = '' OR t.name ILIKE $2 || '%')
+		)
+		SELECT id, name
+		FROM ranked_tags
+		ORDER BY rank, name
+		LIMIT 10
+	`
+	rows, err := r.db.Query(query, spaceID, text, topicID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tags []TagAutocomplete
+	for rows.Next() {
+		var tag TagAutocomplete
+		if err := rows.Scan(&tag.ID, &tag.Name); err != nil {
+			return nil, err
+		}
+		tags = append(tags, tag)
+	}
+	return tags, nil
 }

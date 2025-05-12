@@ -119,6 +119,7 @@ func main() {
 		auth.PATCH("/notes/:id/restore", notesHandler.RestoreNote)
 		auth.GET("/notes/:id", notesHandler.GetNote)
 		auth.GET("/notes", notesHandler.GetNotes)
+		auth.GET("/tags/autocomplete", notesHandler.GetTagAutocomplete)
 
 		auth.POST("/charts", chartsHandler.CreateChart)
 		auth.PATCH("/charts/:id/delete", chartsHandler.DeleteChart)
