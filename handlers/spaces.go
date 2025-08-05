@@ -165,12 +165,19 @@ func (h *SpacesHandler) InviteUser(c *gin.Context) {
 
 func (h *SpacesHandler) GetAccessibleSpaces(c *gin.Context) {
 	userID := c.GetInt("userId")
-	spaces, err := h.spacesRepo.GetSpacesForUser(userID)
+
+	// Use standardized pagination
+	pagination := types.ParsePaginationParams(c)
+
+	spaces, total, err := h.spacesRepo.GetSpacesForUserPaginated(userID, pagination.Offset, pagination.PageSize)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
-	c.JSON(http.StatusOK, types.NewSuccessResponse(spaces))
+
+	// Use standardized response with pagination
+	response := pagination.BuildResponse(spaces, total)
+	c.JSON(http.StatusOK, types.NewSuccessResponse(response))
 }
 
 func (h *SpacesHandler) RemoveUser(c *gin.Context) {
@@ -228,10 +235,17 @@ func (h *SpacesHandler) GetUsersInSpace(c *gin.Context) {
 		c.JSON(http.StatusForbidden, types.NewErrorResponse(types.ErrorCodeForbidden, "No access to the space"))
 		return
 	}
-	participants, err := h.spacesRepo.GetUsersInSpace(spaceID)
+
+	// Use standardized pagination
+	pagination := types.ParsePaginationParams(c)
+
+	participants, total, err := h.spacesRepo.GetUsersInSpacePaginated(spaceID, pagination.Offset, pagination.PageSize)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
-	c.JSON(http.StatusOK, types.NewSuccessResponse(participants))
+
+	// Use standardized response with pagination
+	response := pagination.BuildResponse(participants, total)
+	c.JSON(http.StatusOK, types.NewSuccessResponse(response))
 }

@@ -122,6 +122,54 @@ func (r *SpacesRepository) GetSpacesForUser(userID int) ([]models.Space, error) 
 	return result, nil
 }
 
+func (r *SpacesRepository) GetSpacesForUserPaginated(userID, offset, limit int) ([]models.Space, int, error) {
+	// Get total count
+	var total int
+	err := r.db.QueryRow(`
+		SELECT COUNT(*)
+		FROM space s
+		INNER JOIN user_to_space uts ON s.id = uts.space_id
+		WHERE uts.user_id = $1
+		  AND s.is_deleted = FALSE
+	`, userID).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Get data with pagination
+	rows, err := r.db.Query(`
+		SELECT s.id, s.name, s.owner_id, s.is_deleted, s.created_at, s.modified_at
+		FROM space s
+		INNER JOIN user_to_space uts ON s.id = uts.space_id
+		WHERE uts.user_id = $1
+		  AND s.is_deleted = FALSE
+		ORDER BY s.id
+		LIMIT $2 OFFSET $3
+	`, userID, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var result []models.Space
+	for rows.Next() {
+		var s models.Space
+		err = rows.Scan(
+			&s.ID,
+			&s.Name,
+			&s.OwnerID,
+			&s.IsDeleted,
+			&s.CreatedAt,
+			&s.ModifiedAt,
+		)
+		if err != nil {
+			return nil, 0, err
+		}
+		result = append(result, s)
+	}
+	return result, total, nil
+}
+
 func (r *SpacesRepository) InviteUserToSpace(userID, spaceID, roleID int) error {
 	_, err := r.db.Exec(`
 		INSERT INTO user_to_space (user_id, space_id, role_id)
@@ -161,6 +209,45 @@ func (r *SpacesRepository) GetUsersInSpace(spaceID int) ([]SpaceParticipant, err
 		participants = append(participants, p)
 	}
 	return participants, nil
+}
+
+func (r *SpacesRepository) GetUsersInSpacePaginated(spaceID, offset, limit int) ([]SpaceParticipant, int, error) {
+	// Get total count
+	var total int
+	err := r.db.QueryRow(`
+		SELECT COUNT(*)
+		FROM users u
+		INNER JOIN user_to_space uts ON u.id = uts.user_id
+		WHERE uts.space_id = $1
+	`, spaceID).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Get data with pagination
+	rows, err := r.db.Query(`
+		SELECT u.id, u.username, u.created_at, uts.role_id
+		FROM users u
+		INNER JOIN user_to_space uts ON u.id = uts.user_id
+		WHERE uts.space_id = $1
+		ORDER BY u.id
+		LIMIT $2 OFFSET $3
+	`, spaceID, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var participants []SpaceParticipant
+	for rows.Next() {
+		var p SpaceParticipant
+		err = rows.Scan(&p.ID, &p.Username, &p.CreatedAt, &p.RoleID)
+		if err != nil {
+			return nil, 0, err
+		}
+		participants = append(participants, p)
+	}
+	return participants, total, nil
 }
 
 // Sets or unsets the is_deleted flag on a space.

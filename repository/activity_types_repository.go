@@ -162,3 +162,88 @@ func (r *ActivityTypesRepository) GetActivityTypesBySpace(spaceID int) ([]*model
 	}
 	return result, nil
 }
+
+func (r *ActivityTypesRepository) GetActivityTypesBySpacePaginated(spaceID, offset, limit int) ([]*models.ActivityType, int, error) {
+	// Get total count
+	var total int
+	err := r.db.QueryRow(`
+		SELECT COUNT(*)
+		FROM activity_types
+		WHERE 
+			is_deleted = false
+			AND (
+				(is_default = true AND space_id IS NULL)
+				OR (space_id = $1)
+			)
+	`, spaceID).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Get data with pagination
+	rows, err := r.db.Query(`
+		SELECT id, name, value_type, min_value, max_value, aggregation, space_id, is_default, is_deleted, unit, category_id, created_at, modified_at
+		FROM activity_types
+		WHERE 
+			is_deleted = false
+			AND (
+				(is_default = true AND space_id IS NULL)
+				OR (space_id = $1)
+			)
+		ORDER BY id
+		LIMIT $2 OFFSET $3
+	`, spaceID, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var result []*models.ActivityType
+	for rows.Next() {
+		var a models.ActivityType
+		var dbSpaceID sql.NullInt64
+		var categoryID sql.NullInt64
+		var minVal sql.NullFloat64
+		var maxVal sql.NullFloat64
+		var unit sql.NullString
+
+		err := rows.Scan(
+			&a.ID,
+			&a.Name,
+			&a.ValueType,
+			&minVal,
+			&maxVal,
+			&a.Aggregation,
+			&dbSpaceID,
+			&a.IsDefault,
+			&a.IsDeleted,
+			&unit,
+			&categoryID,
+			&a.CreatedAt,
+			&a.ModifiedAt,
+		)
+		if err != nil {
+			return nil, 0, err
+		}
+		if dbSpaceID.Valid {
+			a.SpaceID = int(dbSpaceID.Int64)
+		}
+		if categoryID.Valid {
+			a.CategoryID = int(categoryID.Int64)
+		}
+		if minVal.Valid {
+			f := minVal.Float64
+			a.MinValue = &f
+		}
+		if maxVal.Valid {
+			f := maxVal.Float64
+			a.MaxValue = &f
+		}
+		if unit.Valid {
+			u := unit.String
+			a.Unit = &u
+		}
+		result = append(result, &a)
+	}
+	return result, total, nil
+}

@@ -69,6 +69,21 @@ paths:
         - Spaces
       security:
         - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          example: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            enum: [10, 20, 50, 100]
+            default: 20
+          example: 20
       responses:
         '200':
           description: List of workspaces
@@ -178,6 +193,20 @@ paths:
           required: true
           schema:
             type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          example: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            enum: [10, 20, 50, 100]
+            default: 20
+          example: 20
       responses:
         '200':
           description: List of users
@@ -342,6 +371,20 @@ paths:
           required: true
           schema:
             type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          example: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            enum: [10, 20, 50, 100]
+            default: 20
+          example: 20
       responses:
         '200':
           description: List of topics
@@ -389,12 +432,16 @@ paths:
           in: query
           schema:
             type: integer
+            minimum: 1
             default: 1
+          example: 1
         - name: pageSize
           in: query
           schema:
             type: integer
+            enum: [10, 20, 50, 100]
             default: 20
+          example: 20
       responses:
         '200':
           description: List of notes
@@ -651,6 +698,20 @@ paths:
           required: true
           schema:
             type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          example: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            enum: [10, 20, 50, 100]
+            default: 20
+          example: 20
       responses:
         '200':
           description: List of activity types
@@ -743,6 +804,30 @@ paths:
         - Charts
       security:
         - BearerAuth: []
+      parameters:
+        - name: spaceId
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: topicId
+          in: query
+          schema:
+            type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          example: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            enum: [10, 20, 50, 100]
+            default: 20
+          example: 20
       responses:
         '200':
           description: List of charts
@@ -936,6 +1021,37 @@ components:
           $ref: '#/components/schemas/APIError'
       required:
         - success
+
+    PaginatedResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+        pagination:
+          type: object
+          properties:
+            page:
+              type: integer
+              example: 1
+            pageSize:
+              type: integer
+              example: 20
+            total:
+              type: integer
+              example: 150
+            totalPages:
+              type: integer
+              example: 8
+          required:
+            - page
+            - pageSize
+            - total
+            - totalPages
+      required:
+        - data
+        - pagination
 
     APIError:
       type: object

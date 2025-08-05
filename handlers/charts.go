@@ -300,8 +300,8 @@ func (h *ChartsHandler) GetCharts(c *gin.Context) {
 		return
 	}
 
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "10"))
+	// Use standardized pagination
+	pagination := types.ParsePaginationParams(c)
 
 	topicIDParam := c.Query("topicId")
 	var topicID *int
@@ -313,8 +313,8 @@ func (h *ChartsHandler) GetCharts(c *gin.Context) {
 	}
 
 	filters := models.ChartFilters{
-		Page:     page,
-		PageSize: pageSize,
+		Page:     pagination.Page,
+		PageSize: pagination.PageSize,
 		TopicID:  topicID,
 	}
 
@@ -324,8 +324,7 @@ func (h *ChartsHandler) GetCharts(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, types.NewSuccessResponse(gin.H{
-		"charts": charts,
-		"total":  total,
-	}))
+	// Use standardized response with pagination
+	response := pagination.BuildResponse(charts, total)
+	c.JSON(http.StatusOK, types.NewSuccessResponse(response))
 }

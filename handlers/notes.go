@@ -301,8 +301,10 @@ func (h *NotesHandler) GetNotes(c *gin.Context) {
 		c.JSON(http.StatusForbidden, types.NewErrorResponse(types.ErrorCodeForbidden, "No access to the space"))
 		return
 	}
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "10"))
+
+	// Use standardized pagination
+	pagination := types.ParsePaginationParams(c)
+
 	topicIDParam := c.Query("topicId")
 	var topicID *int
 	if topicIDParam != "" {
@@ -353,8 +355,8 @@ func (h *NotesHandler) GetNotes(c *gin.Context) {
 		IncludeTags: includeTags,
 		ExcludeTags: excludeTags,
 		NotReply:    notReply,
-		Page:        page,
-		PageSize:    pageSize,
+		Page:        pagination.Page,
+		PageSize:    pagination.PageSize,
 		SearchQuery: searchQueryPtr,
 		ParentID:    parentID,
 		SortField:   sortField,
@@ -365,10 +367,10 @@ func (h *NotesHandler) GetNotes(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
-	c.JSON(http.StatusOK, types.NewSuccessResponse(gin.H{
-		"notes": notes,
-		"total": total,
-	}))
+
+	// Use standardized response with pagination
+	response := pagination.BuildResponse(notes, total)
+	c.JSON(http.StatusOK, types.NewSuccessResponse(response))
 }
 
 func (h *NotesHandler) GetTagAutocomplete(c *gin.Context) {

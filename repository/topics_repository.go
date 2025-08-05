@@ -112,3 +112,56 @@ func (r *TopicsRepository) GetTopicsBySpace(spaceID int) ([]*models.Topic, error
 	}
 	return result, nil
 }
+
+func (r *TopicsRepository) GetTopicsBySpacePaginated(spaceID, offset, limit int) ([]*models.Topic, int, error) {
+	// Get total count
+	var total int
+	err := r.db.QueryRow(`
+		SELECT COUNT(*)
+		FROM topic
+		WHERE space_id = $1
+		  AND is_deleted = FALSE
+	`, spaceID).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Get data with pagination
+	rows, err := r.db.Query(`
+		SELECT id,
+		       space_id,
+		       name,
+		       type_id,
+		       is_deleted,
+		       created_at,
+		       modified_at
+		FROM topic
+		WHERE space_id = $1
+		  AND is_deleted = FALSE
+		ORDER BY id
+		LIMIT $2 OFFSET $3
+	`, spaceID, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var result []*models.Topic
+	for rows.Next() {
+		var t models.Topic
+		err = rows.Scan(
+			&t.ID,
+			&t.SpaceID,
+			&t.Name,
+			&t.TypeID,
+			&t.IsDeleted,
+			&t.CreatedAt,
+			&t.ModifiedAt,
+		)
+		if err != nil {
+			return nil, 0, err
+		}
+		result = append(result, &t)
+	}
+	return result, total, nil
+}

@@ -217,10 +217,17 @@ func (h *ActivityTypesHandler) GetActivityTypesBySpace(c *gin.Context) {
 		c.JSON(http.StatusForbidden, types.NewErrorResponse(types.ErrorCodeForbidden, "No access to the space"))
 		return
 	}
-	activityTypes, err := h.repo.GetActivityTypesBySpace(spaceID)
+
+	// Use standardized pagination
+	pagination := types.ParsePaginationParams(c)
+
+	activityTypes, total, err := h.repo.GetActivityTypesBySpacePaginated(spaceID, pagination.Offset, pagination.PageSize)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
-	c.JSON(http.StatusOK, types.NewSuccessResponse(activityTypes))
+
+	// Use standardized response with pagination
+	response := pagination.BuildResponse(activityTypes, total)
+	c.JSON(http.StatusOK, types.NewSuccessResponse(response))
 }

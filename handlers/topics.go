@@ -173,10 +173,17 @@ func (h *TopicsHandler) GetTopicsBySpace(c *gin.Context) {
 		c.JSON(http.StatusForbidden, types.NewErrorResponse(types.ErrorCodeForbidden, "No access to the space"))
 		return
 	}
-	topics, err := h.topicsRepo.GetTopicsBySpace(spaceID)
+
+	// Use standardized pagination
+	pagination := types.ParsePaginationParams(c)
+
+	topics, total, err := h.topicsRepo.GetTopicsBySpacePaginated(spaceID, pagination.Offset, pagination.PageSize)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
-	c.JSON(http.StatusOK, types.NewSuccessResponse(topics))
+
+	// Use standardized response with pagination
+	response := pagination.BuildResponse(topics, total)
+	c.JSON(http.StatusOK, types.NewSuccessResponse(response))
 }
