@@ -105,7 +105,8 @@ docker-compose up -d
 
 ### Run tests
 ```bash
-go test ./...
+# Quick test run (PowerShell)
+.\run-tests.ps1
 ```
 
 ### Local development

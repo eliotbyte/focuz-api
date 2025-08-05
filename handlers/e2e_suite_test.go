@@ -38,10 +38,13 @@ func (s *E2ETestSuite) getGuestUserID() int {
 
 	var data map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&data)
-	if data["token"] == nil {
-		return 0
+	if data["success"] != nil && data["success"].(bool) {
+		tokenData := data["data"].(map[string]interface{})
+		if tokenData["token"] != nil {
+			return 2
+		}
 	}
-	return 2
+	return 0
 }
 
 func (s *E2ETestSuite) createTopic(name string, typeID int) int {
@@ -61,7 +64,11 @@ func (s *E2ETestSuite) createTopic(name string, typeID int) int {
 	s.Equal(http.StatusCreated, resp.StatusCode)
 	var topicResp map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&topicResp)
-	return int(topicResp["id"].(float64))
+	if topicResp["success"] != nil && topicResp["success"].(bool) {
+		topicData := topicResp["data"].(map[string]interface{})
+		return int(topicData["id"].(float64))
+	}
+	return 0
 }
 
 func TestE2ETestSuite(t *testing.T) {

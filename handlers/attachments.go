@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"focuz-api/initializers"
 	"focuz-api/repository"
+	"focuz-api/types"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -31,40 +32,40 @@ func (h *AttachmentsHandler) UploadFile(c *gin.Context) {
 
 	noteIDStr := c.PostForm("note_id")
 	if noteIDStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "note_id is required"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, "note_id is required"))
 		return
 	}
 	noteID, err := strconv.Atoi(noteIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid note_id"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, "invalid note_id"))
 		return
 	}
 
 	note, err := h.notesRepo.GetNoteByID(noteID)
 	if err != nil || note == nil || note.IsDeleted {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid note"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeInvalidRequest, "invalid note"))
 		return
 	}
 
 	topic, err := h.topicsRepo.GetTopicByID(note.TopicID)
 	if err != nil || topic == nil || topic.IsDeleted {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid topic"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeInvalidRequest, "invalid topic"))
 		return
 	}
 
 	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, topic.SpaceID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
 	if roleID == 0 {
-		c.JSON(http.StatusForbidden, gin.H{"error": "no access"})
+		c.JSON(http.StatusForbidden, types.NewErrorResponse(types.ErrorCodeForbidden, "no access"))
 		return
 	}
 
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "file is required"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, "file is required"))
 		return
 	}
 	defer file.Close()
@@ -73,13 +74,13 @@ func (h *AttachmentsHandler) UploadFile(c *gin.Context) {
 	fileSize := header.Size
 
 	if err := initializers.CheckFileAllowed(fileSize, contentType); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, err.Error()))
 		return
 	}
 
 	attID, err := h.attachmentsRepo.CreateAttachment(noteID, header.Filename, contentType, fileSize)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
 
@@ -94,50 +95,50 @@ func (h *AttachmentsHandler) UploadFile(c *gin.Context) {
 		},
 	)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to upload to minio"})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, "failed to upload to minio"))
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"attachment_id": attID})
+	c.JSON(http.StatusCreated, types.NewSuccessResponse(gin.H{"attachment_id": attID}))
 }
 
 func (h *AttachmentsHandler) GetFile(c *gin.Context) {
 	userID := c.GetInt("userId")
 	attID := c.Param("id")
 	if attID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "attachment id is required"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, "attachment id is required"))
 		return
 	}
 
 	att, err := h.attachmentsRepo.GetAttachmentByID(attID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
 	if att == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "attachment not found"})
+		c.JSON(http.StatusNotFound, types.NewErrorResponse(types.ErrorCodeNotFound, "attachment not found"))
 		return
 	}
 
 	note, err := h.notesRepo.GetNoteByID(att.NoteID)
 	if err != nil || note == nil || note.IsDeleted {
-		c.JSON(http.StatusForbidden, gin.H{"error": "no access"})
+		c.JSON(http.StatusForbidden, types.NewErrorResponse(types.ErrorCodeForbidden, "no access"))
 		return
 	}
 
 	topic, err := h.topicsRepo.GetTopicByID(note.TopicID)
 	if err != nil || topic == nil || topic.IsDeleted {
-		c.JSON(http.StatusForbidden, gin.H{"error": "no access"})
+		c.JSON(http.StatusForbidden, types.NewErrorResponse(types.ErrorCodeForbidden, "no access"))
 		return
 	}
 
 	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, topic.SpaceID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
 	if roleID == 0 {
-		c.JSON(http.StatusForbidden, gin.H{"error": "no access"})
+		c.JSON(http.StatusForbidden, types.NewErrorResponse(types.ErrorCodeForbidden, "no access"))
 		return
 	}
 
@@ -160,7 +161,7 @@ func (h *AttachmentsHandler) GetFile(c *gin.Context) {
 		Region: "us-east-1", // добавляем регион для корректного расчёта подписи
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create external minio client"})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, "failed to create external minio client"))
 		return
 	}
 
@@ -172,13 +173,13 @@ func (h *AttachmentsHandler) GetFile(c *gin.Context) {
 		reqParams,
 	)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create presigned url"})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, "failed to create presigned url"))
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	c.JSON(http.StatusOK, types.NewSuccessResponse(gin.H{
 		"url": presignedURL.String(),
-	})
+	}))
 }
 
 func sanitizeFilename(name string) string {

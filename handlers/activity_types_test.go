@@ -49,8 +49,8 @@ func (s *E2ETestSuite) Test21_CreateActivityType_MinValueError() {
 
 func (s *E2ETestSuite) Test22_DeleteActivityType() {
 	body := map[string]interface{}{
-		"name":        "money",
-		"value_type":  "float",
+		"name":        "deletable",
+		"value_type":  "integer",
 		"aggregation": "sum",
 	}
 	jsonBody, _ := json.Marshal(body)
@@ -69,7 +69,9 @@ func (s *E2ETestSuite) Test22_DeleteActivityType() {
 	if respCreate.StatusCode == http.StatusCreated {
 		var respData map[string]interface{}
 		json.NewDecoder(respCreate.Body).Decode(&respData)
-		typeID := int(respData["id"].(float64))
+		s.True(respData["success"].(bool))
+		typeData := respData["data"].(map[string]interface{})
+		typeID := int(typeData["id"].(float64))
 
 		reqDel, _ := http.NewRequest("PATCH", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types/"+strconv.Itoa(typeID)+"/delete", nil)
 		reqDel.Header.Set("Authorization", "Bearer "+s.ownerToken)
@@ -79,7 +81,7 @@ func (s *E2ETestSuite) Test22_DeleteActivityType() {
 			return
 		}
 		defer respDel.Body.Close()
-		s.Equal(http.StatusNoContent, respDel.StatusCode)
+		s.Equal(http.StatusOK, respDel.StatusCode)
 	}
 }
 
@@ -105,7 +107,9 @@ func (s *E2ETestSuite) Test23_RestoreActivityType() {
 
 	var respData map[string]interface{}
 	json.NewDecoder(respCreate.Body).Decode(&respData)
-	typeID := int(respData["id"].(float64))
+	s.True(respData["success"].(bool))
+	typeData := respData["data"].(map[string]interface{})
+	typeID := int(typeData["id"].(float64))
 
 	reqDel, _ := http.NewRequest("PATCH", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types/"+strconv.Itoa(typeID)+"/delete", nil)
 	reqDel.Header.Set("Authorization", "Bearer "+s.ownerToken)
@@ -115,7 +119,7 @@ func (s *E2ETestSuite) Test23_RestoreActivityType() {
 		return
 	}
 	defer respDel.Body.Close()
-	s.Equal(http.StatusNoContent, respDel.StatusCode)
+	s.Equal(http.StatusOK, respDel.StatusCode)
 
 	reqRestore, _ := http.NewRequest("PATCH", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types/"+strconv.Itoa(typeID)+"/restore", nil)
 	reqRestore.Header.Set("Authorization", "Bearer "+s.ownerToken)
@@ -125,7 +129,7 @@ func (s *E2ETestSuite) Test23_RestoreActivityType() {
 		return
 	}
 	defer respRestore.Body.Close()
-	s.Equal(http.StatusNoContent, respRestore.StatusCode)
+	s.Equal(http.StatusOK, respRestore.StatusCode)
 }
 
 func (s *E2ETestSuite) Test24_CreateActivityType_DuplicateName() {
@@ -267,8 +271,10 @@ func (s *E2ETestSuite) Test31_GetActivityTypesBySpace() {
 	defer resp.Body.Close()
 	s.Equal(http.StatusOK, resp.StatusCode)
 
-	var types []map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&types)
+	var response map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&response)
+	s.True(response["success"].(bool))
+	types := response["data"].([]interface{})
 	s.True(len(types) >= 3)
 }
 
@@ -281,13 +287,16 @@ func (s *E2ETestSuite) Test31_CannotDeleteDefaultActivityType() {
 	defer resp.Body.Close()
 	s.Equal(http.StatusOK, resp.StatusCode)
 
-	var types []map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&types)
+	var response map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&response)
+	s.True(response["success"].(bool))
+	types := response["data"].([]interface{})
 
 	var defaultTypeID int
 	for _, t := range types {
-		if t["isDefault"].(bool) && t["name"] == "mood" {
-			defaultTypeID = int(t["id"].(float64))
+		typeData := t.(map[string]interface{})
+		if typeData["isDefault"].(bool) && typeData["name"] == "mood" {
+			defaultTypeID = int(typeData["id"].(float64))
 			break
 		}
 	}
@@ -310,13 +319,16 @@ func (s *E2ETestSuite) Test32_CannotRestoreDefaultActivityType() {
 	defer resp.Body.Close()
 	s.Equal(http.StatusOK, resp.StatusCode)
 
-	var types []map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&types)
+	var response map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&response)
+	s.True(response["success"].(bool))
+	types := response["data"].([]interface{})
 
 	var defaultTypeID int
 	for _, t := range types {
-		if t["isDefault"].(bool) && t["name"] == "mood" {
-			defaultTypeID = int(t["id"].(float64))
+		typeData := t.(map[string]interface{})
+		if typeData["isDefault"].(bool) && typeData["name"] == "mood" {
+			defaultTypeID = int(typeData["id"].(float64))
 			break
 		}
 	}

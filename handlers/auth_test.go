@@ -36,10 +36,16 @@ func (s *E2ETestSuite) Test4_LoginOwnerValid() {
 	s.NoError(err)
 	defer resp.Body.Close()
 	s.Equal(http.StatusOK, resp.StatusCode)
-	var data map[string]string
+
+	var data map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&data)
-	s.ownerToken = data["token"]
-	s.NotEmpty(s.ownerToken)
+	if data["success"] != nil && data["success"].(bool) {
+		tokenData := data["data"].(map[string]interface{})
+		s.ownerToken = tokenData["token"].(string)
+		s.NotEmpty(s.ownerToken)
+	} else {
+		s.Fail("Login failed")
+	}
 }
 
 func (s *E2ETestSuite) Test6_RegisterGuest() {
@@ -56,8 +62,14 @@ func (s *E2ETestSuite) Test7_LoginGuest() {
 	s.NoError(err)
 	defer resp.Body.Close()
 	s.Equal(http.StatusOK, resp.StatusCode)
-	var data map[string]string
+
+	var data map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&data)
-	s.guestToken = data["token"]
-	s.NotEmpty(s.guestToken)
+	if data["success"] != nil && data["success"].(bool) {
+		tokenData := data["data"].(map[string]interface{})
+		s.guestToken = tokenData["token"].(string)
+		s.NotEmpty(s.guestToken)
+	} else {
+		s.Fail("Login failed")
+	}
 }

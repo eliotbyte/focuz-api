@@ -69,7 +69,7 @@ func (s *E2ETestSuite) Test23_UploadAndGetFile() {
 	resp, err := client.Do(req)
 	s.NoError(err)
 	defer resp.Body.Close()
-	s.Equal(http.StatusOK, resp.StatusCode)
+	s.Equal(http.StatusCreated, resp.StatusCode)
 
 	// read attachment_id
 	buf := new(bytes.Buffer)

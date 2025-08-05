@@ -10,7 +10,8 @@ import (
 
 func (s *E2ETestSuite) Test40_CreateActivityValid() {
 	noteReq := map[string]interface{}{
-		"text":    "Activity note test",
+		"text":    "Test note for activity",
+		"tags":    []string{"test"},
 		"topicId": s.createdTopicID,
 	}
 	noteJSON, _ := json.Marshal(noteReq)
@@ -24,7 +25,9 @@ func (s *E2ETestSuite) Test40_CreateActivityValid() {
 	s.Equal(http.StatusCreated, noteResp.StatusCode)
 	var noteData map[string]interface{}
 	json.NewDecoder(noteResp.Body).Decode(&noteData)
-	noteID := int(noteData["id"].(float64))
+	s.True(noteData["success"].(bool))
+	noteResponseData := noteData["data"].(map[string]interface{})
+	noteID := int(noteResponseData["id"].(float64))
 
 	actReq := map[string]interface{}{
 		"typeId":  1,
@@ -41,9 +44,11 @@ func (s *E2ETestSuite) Test40_CreateActivityValid() {
 	s.Equal(http.StatusCreated, actResp.StatusCode)
 	var actData map[string]interface{}
 	json.NewDecoder(actResp.Body).Decode(&actData)
-	s.True(actData["id"].(float64) > 0)
-	s.NotEmpty(actData["createdAt"])
-	s.NotEmpty(actData["modifiedAt"])
+	s.True(actData["success"].(bool))
+	actResponseData := actData["data"].(map[string]interface{})
+	s.True(actResponseData["id"].(float64) > 0)
+	s.NotEmpty(actResponseData["createdAt"])
+	s.NotEmpty(actResponseData["modifiedAt"])
 
 	s.createdNoteID = noteID
 }
@@ -100,21 +105,23 @@ func (s *E2ETestSuite) Test43_DeleteRestoreActivity() {
 
 	var respData map[string]interface{}
 	json.NewDecoder(respCreate.Body).Decode(&respData)
-	activityID := int(respData["id"].(float64))
+	s.True(respData["success"].(bool))
+	activityResponseData := respData["data"].(map[string]interface{})
+	activityID := int(activityResponseData["id"].(float64))
 
 	reqDel, _ := http.NewRequest("PATCH", s.baseURL+"/activities/"+strconv.Itoa(activityID)+"/delete", nil)
 	reqDel.Header.Set("Authorization", "Bearer "+s.ownerToken)
 	respDel, errDel := client.Do(reqDel)
 	s.NoError(errDel)
 	defer respDel.Body.Close()
-	s.Equal(http.StatusNoContent, respDel.StatusCode)
+	s.Equal(http.StatusOK, respDel.StatusCode)
 
 	reqRestore, _ := http.NewRequest("PATCH", s.baseURL+"/activities/"+strconv.Itoa(activityID)+"/restore", nil)
 	reqRestore.Header.Set("Authorization", "Bearer "+s.ownerToken)
 	respRestore, errRestore := client.Do(reqRestore)
 	s.NoError(errRestore)
 	defer respRestore.Body.Close()
-	s.Equal(http.StatusNoContent, respRestore.StatusCode)
+	s.Equal(http.StatusOK, respRestore.StatusCode)
 }
 
 func (s *E2ETestSuite) Test44_UpdateActivity() {
@@ -135,7 +142,9 @@ func (s *E2ETestSuite) Test44_UpdateActivity() {
 
 	var respData map[string]interface{}
 	json.NewDecoder(respCreate.Body).Decode(&respData)
-	activityID := int(respData["id"].(float64))
+	s.True(respData["success"].(bool))
+	activityResponseData := respData["data"].(map[string]interface{})
+	activityID := int(activityResponseData["id"].(float64))
 
 	updateReq := map[string]interface{}{
 		"value":   "8",
@@ -148,7 +157,7 @@ func (s *E2ETestSuite) Test44_UpdateActivity() {
 	respUpdate, errUpdate := client.Do(reqUpdate)
 	s.NoError(errUpdate)
 	defer respUpdate.Body.Close()
-	s.Equal(http.StatusNoContent, respUpdate.StatusCode)
+	s.Equal(http.StatusOK, respUpdate.StatusCode)
 }
 
 func (s *E2ETestSuite) Test45_CreateActivityInaccessibleNote() {
@@ -166,7 +175,9 @@ func (s *E2ETestSuite) Test45_CreateActivityInaccessibleNote() {
 
 	var spaceResp map[string]interface{}
 	json.NewDecoder(respSpace.Body).Decode(&spaceResp)
-	newSpaceID := int(spaceResp["id"].(float64))
+	s.True(spaceResp["success"].(bool))
+	spaceResponseData := spaceResp["data"].(map[string]interface{})
+	newSpaceID := int(spaceResponseData["id"].(float64))
 
 	reqNote := map[string]interface{}{
 		"text":    "Private note",
@@ -182,7 +193,9 @@ func (s *E2ETestSuite) Test45_CreateActivityInaccessibleNote() {
 	}
 	var privateNote map[string]interface{}
 	json.NewDecoder(respNoteCreate.Body).Decode(&privateNote)
-	privateNoteID := int(privateNote["id"].(float64))
+	s.True(privateNote["success"].(bool))
+	privateNoteResponseData := privateNote["data"].(map[string]interface{})
+	privateNoteID := int(privateNoteResponseData["id"].(float64))
 
 	bodyUser := `{"username":"outsider","password":"outsiderpass"}`
 	respUser, errUser := http.Post(s.baseURL+"/register", "application/json", bytes.NewBuffer([]byte(bodyUser)))
@@ -195,9 +208,11 @@ func (s *E2ETestSuite) Test45_CreateActivityInaccessibleNote() {
 	respLogin, errLogin := client.Do(loginReq)
 	s.NoError(errLogin)
 	defer respLogin.Body.Close()
-	var data map[string]string
+	var data map[string]interface{}
 	json.NewDecoder(respLogin.Body).Decode(&data)
-	outsiderToken := data["token"]
+	s.True(data["success"].(bool))
+	tokenData := data["data"].(map[string]interface{})
+	outsiderToken := tokenData["token"].(string)
 
 	actReq := map[string]interface{}{
 		"typeId":  1,
@@ -220,11 +235,11 @@ func (s *E2ETestSuite) Test46_GetActivitiesAnalysis() {
 	client := &http.Client{}
 
 	now := time.Now().AddDate(0, 0, -1)
-	yesterday := now.Format(time.RFC3339)
 	reqBody1 := map[string]interface{}{
-		"text":    "Mood note 1",
+		"text":    "Note 1 for analysis",
+		"tags":    []string{"analysis"},
 		"topicId": s.createdTopicID,
-		"date":    yesterday,
+		"date":    now.Format("2006-01-02"),
 	}
 	b1, _ := json.Marshal(reqBody1)
 	reqN1, _ := http.NewRequest("POST", s.baseURL+"/notes", bytes.NewBuffer(b1))
@@ -235,11 +250,13 @@ func (s *E2ETestSuite) Test46_GetActivitiesAnalysis() {
 	defer respN1.Body.Close()
 	var nd1 map[string]interface{}
 	json.NewDecoder(respN1.Body).Decode(&nd1)
-	note1ID := int(nd1["id"].(float64))
+	s.True(nd1["success"].(bool))
+	note1ResponseData := nd1["data"].(map[string]interface{})
+	note1ID := int(note1ResponseData["id"].(float64))
 
 	actReq1 := map[string]interface{}{
 		"typeId":  1,
-		"value":   "8",
+		"value":   "5",
 		"note_id": note1ID,
 	}
 	a1, _ := json.Marshal(actReq1)
@@ -249,9 +266,10 @@ func (s *E2ETestSuite) Test46_GetActivitiesAnalysis() {
 	client.Do(reqA1)
 
 	reqBody2 := map[string]interface{}{
-		"text":    "Mood note 2",
+		"text":    "Note 2 for analysis",
+		"tags":    []string{"analysis"},
 		"topicId": s.createdTopicID,
-		"date":    time.Now().Format(time.RFC3339),
+		"date":    now.Format("2006-01-02"),
 	}
 	b2, _ := json.Marshal(reqBody2)
 	reqN2, _ := http.NewRequest("POST", s.baseURL+"/notes", bytes.NewBuffer(b2))
@@ -262,7 +280,9 @@ func (s *E2ETestSuite) Test46_GetActivitiesAnalysis() {
 	defer respN2.Body.Close()
 	var nd2 map[string]interface{}
 	json.NewDecoder(respN2.Body).Decode(&nd2)
-	note2ID := int(nd2["id"].(float64))
+	s.True(nd2["success"].(bool))
+	note2ResponseData := nd2["data"].(map[string]interface{})
+	note2ID := int(note2ResponseData["id"].(float64))
 
 	actReq2 := map[string]interface{}{
 		"typeId":  1,
@@ -283,8 +303,10 @@ func (s *E2ETestSuite) Test46_GetActivitiesAnalysis() {
 	defer resp.Body.Close()
 	s.Equal(http.StatusOK, resp.StatusCode)
 
-	var analysis []map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&analysis)
+	var response map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&response)
+	s.True(response["success"].(bool))
+	analysis := response["data"].([]interface{})
 	s.True(len(analysis) >= 1)
 }
 
@@ -334,14 +356,16 @@ func (s *E2ETestSuite) Test48_CanCreateActivityWhenExistingIsDeleted() {
 
 	var data map[string]interface{}
 	json.NewDecoder(respCreate.Body).Decode(&data)
-	activityID := int(data["id"].(float64))
+	s.True(data["success"].(bool))
+	activityResponseData := data["data"].(map[string]interface{})
+	activityID := int(activityResponseData["id"].(float64))
 
 	reqDel, _ := http.NewRequest("PATCH", s.baseURL+"/activities/"+strconv.Itoa(activityID)+"/delete", nil)
 	reqDel.Header.Set("Authorization", "Bearer "+s.ownerToken)
 	respDel, errDel := client.Do(reqDel)
 	s.NoError(errDel)
 	defer respDel.Body.Close()
-	s.Equal(http.StatusNoContent, respDel.StatusCode)
+	s.Equal(http.StatusOK, respDel.StatusCode)
 
 	reqCreate2, _ := http.NewRequest("POST", s.baseURL+"/activities", bytes.NewBuffer(actJSON))
 	reqCreate2.Header.Set("Authorization", "Bearer "+s.ownerToken)

@@ -45,16 +45,16 @@ func (h *ActivitiesHandler) CreateActivity(c *gin.Context) {
 		NoteID *int   `json:"note_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, err.Error()))
 		return
 	}
 	activityType, err := h.activityTypesRepo.GetActivityTypeByID(req.TypeID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
 	if activityType == nil || activityType.IsDeleted {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid or deleted activity type"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeInvalidRequest, "Invalid or deleted activity type"))
 		return
 	}
 	userID := c.GetInt("userId")
@@ -63,133 +63,133 @@ func (h *ActivitiesHandler) CreateActivity(c *gin.Context) {
 	if req.NoteID != nil {
 		note, nerr := h.notesRepo.GetNoteByID(*req.NoteID)
 		if nerr != nil || note == nil || note.IsDeleted {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid note"})
+			c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeInvalidRequest, "Invalid note"))
 			return
 		}
 		topic, terr := h.topicsRepo.GetTopicByID(note.TopicID)
 		if terr != nil || topic == nil || topic.IsDeleted {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid topic"})
+			c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeInvalidRequest, "Invalid topic"))
 			return
 		}
 		spaceID = topic.SpaceID
 		roleID, rerr := h.spacesRepo.GetUserRoleIDInSpace(userID, spaceID)
 		if rerr != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": rerr.Error()})
+			c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, rerr.Error()))
 			return
 		}
 		if roleID == 0 {
-			c.JSON(http.StatusForbidden, gin.H{"error": "No access to this note"})
+			c.JSON(http.StatusForbidden, types.NewErrorResponse(types.ErrorCodeForbidden, "No access to this note"))
 			return
 		}
 	}
 
 	checkedValue, err := h.validateActivityValue(activityType, req.Value)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, err.Error()))
 		return
 	}
 
 	created, err := h.activitiesRepo.CreateActivity(userID, req.TypeID, checkedValue, req.NoteID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
-	c.JSON(http.StatusCreated, created)
+	c.JSON(http.StatusCreated, types.NewSuccessResponse(created))
 }
 
 func (h *ActivitiesHandler) DeleteActivity(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("activityId"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid activity ID"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, "Invalid activity ID"))
 		return
 	}
 	activity, err := h.activitiesRepo.GetActivityByID(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
 	if activity == nil || activity.IsDeleted {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Activity not found"})
+		c.JSON(http.StatusNotFound, types.NewErrorResponse(types.ErrorCodeNotFound, "Activity not found"))
 		return
 	}
 	userID := c.GetInt("userId")
 	spaceID, perr := h.getSpaceIDForActivity(activity)
 	if perr != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": perr.Error()})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeInvalidRequest, perr.Error()))
 		return
 	}
 	if spaceID > 0 {
 		roleID, rerr := h.spacesRepo.GetUserRoleIDInSpace(userID, spaceID)
 		if rerr != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": rerr.Error()})
+			c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, rerr.Error()))
 			return
 		}
 		if roleID == 0 {
-			c.JSON(http.StatusForbidden, gin.H{"error": "No access to this activity"})
+			c.JSON(http.StatusForbidden, types.NewErrorResponse(types.ErrorCodeForbidden, "No access to this activity"))
 			return
 		}
 	}
 	err = h.activitiesRepo.SetActivityDeleted(id, true)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
-	c.Status(http.StatusNoContent)
+	c.JSON(http.StatusOK, types.NewSuccessResponse(gin.H{"message": "Activity deleted successfully"}))
 }
 
 func (h *ActivitiesHandler) RestoreActivity(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("activityId"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid activity ID"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, "Invalid activity ID"))
 		return
 	}
 	activity, err := h.activitiesRepo.GetActivityByID(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
 	if activity == nil || !activity.IsDeleted {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Activity not found"})
+		c.JSON(http.StatusNotFound, types.NewErrorResponse(types.ErrorCodeNotFound, "Activity not found"))
 		return
 	}
 	userID := c.GetInt("userId")
 	spaceID, perr := h.getSpaceIDForActivity(activity)
 	if perr != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": perr.Error()})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeInvalidRequest, perr.Error()))
 		return
 	}
 	if spaceID > 0 {
 		roleID, rerr := h.spacesRepo.GetUserRoleIDInSpace(userID, spaceID)
 		if rerr != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": rerr.Error()})
+			c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, rerr.Error()))
 			return
 		}
 		if roleID == 0 {
-			c.JSON(http.StatusForbidden, gin.H{"error": "No access to this activity"})
+			c.JSON(http.StatusForbidden, types.NewErrorResponse(types.ErrorCodeForbidden, "No access to this activity"))
 			return
 		}
 	}
 	err = h.activitiesRepo.SetActivityDeleted(id, false)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
-	c.Status(http.StatusNoContent)
+	c.JSON(http.StatusOK, types.NewSuccessResponse(gin.H{"message": "Activity restored successfully"}))
 }
 
 func (h *ActivitiesHandler) UpdateActivity(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("activityId"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid activity ID"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, "Invalid activity ID"))
 		return
 	}
 	activity, err := h.activitiesRepo.GetActivityByID(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
 	if activity == nil || activity.IsDeleted {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Activity not found"})
+		c.JSON(http.StatusNotFound, types.NewErrorResponse(types.ErrorCodeNotFound, "Activity not found"))
 		return
 	}
 	var req struct {
@@ -197,64 +197,46 @@ func (h *ActivitiesHandler) UpdateActivity(c *gin.Context) {
 		NoteID *int   `json:"note_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	activityType, err := h.activityTypesRepo.GetActivityTypeByID(activity.TypeID)
-	if err != nil || activityType == nil || activityType.IsDeleted {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid activity type"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, err.Error()))
 		return
 	}
 	userID := c.GetInt("userId")
-
-	var spaceID int
-	if req.NoteID != nil && *req.NoteID > 0 {
-		note, nerr := h.notesRepo.GetNoteByID(*req.NoteID)
-		if nerr != nil || note == nil || note.IsDeleted {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid note"})
-			return
-		}
-		topic, terr := h.topicsRepo.GetTopicByID(note.TopicID)
-		if terr != nil || topic == nil || topic.IsDeleted {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid topic"})
-			return
-		}
-		spaceID = topic.SpaceID
+	spaceID, perr := h.getSpaceIDForActivity(activity)
+	if perr != nil {
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeInvalidRequest, perr.Error()))
+		return
+	}
+	if spaceID > 0 {
 		roleID, rerr := h.spacesRepo.GetUserRoleIDInSpace(userID, spaceID)
 		if rerr != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": rerr.Error()})
+			c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, rerr.Error()))
 			return
 		}
 		if roleID == 0 {
-			c.JSON(http.StatusForbidden, gin.H{"error": "No access to this note"})
+			c.JSON(http.StatusForbidden, types.NewErrorResponse(types.ErrorCodeForbidden, "No access to this activity"))
 			return
 		}
-	} else {
-		spaceID, _ = h.getSpaceIDForActivity(activity)
-		if spaceID > 0 {
-			roleID, rerr := h.spacesRepo.GetUserRoleIDInSpace(userID, spaceID)
-			if rerr != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": rerr.Error()})
-				return
-			}
-			if roleID == 0 {
-				c.JSON(http.StatusForbidden, gin.H{"error": "No access to this activity"})
-				return
-			}
-		}
 	}
-
+	activityType, err := h.activityTypesRepo.GetActivityTypeByID(activity.TypeID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
+		return
+	}
+	if activityType == nil || activityType.IsDeleted {
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeInvalidRequest, "Invalid or deleted activity type"))
+		return
+	}
 	checkedValue, err := h.validateActivityValue(activityType, req.Value)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, err.Error()))
 		return
 	}
 	err = h.activitiesRepo.UpdateActivity(id, checkedValue, req.NoteID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
-	c.Status(http.StatusNoContent)
+	c.JSON(http.StatusOK, types.NewSuccessResponse(gin.H{"message": "Activity updated successfully"}))
 }
 
 func (h *ActivitiesHandler) getSpaceIDForActivity(activity *models.Activity) (int, error) {
@@ -331,48 +313,48 @@ func (h *ActivitiesHandler) GetActivitiesAnalysis(c *gin.Context) {
 	typeIDStr := c.Query("typeId")
 	periodIDStr := c.Query("periodId")
 	if spaceIDStr == "" || typeIDStr == "" || periodIDStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "spaceId, typeId and periodId are required"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, "spaceId, typeId and periodId are required"))
 		return
 	}
 	spaceID, err := strconv.Atoi(spaceIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid spaceId"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, "invalid spaceId"))
 		return
 	}
 	typeID, err := strconv.Atoi(typeIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid typeId"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, "invalid typeId"))
 		return
 	}
 	periodID, err := strconv.Atoi(periodIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid periodId"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, "invalid periodId"))
 		return
 	}
 
 	periodType := types.GetPeriodTypeByID(periodID)
 	if periodType == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid period type"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeInvalidRequest, "invalid period type"))
 		return
 	}
 
 	userID := c.GetInt("userId")
 	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, spaceID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
 	if roleID == 0 {
-		c.JSON(http.StatusForbidden, gin.H{"error": "No access to this space"})
+		c.JSON(http.StatusForbidden, types.NewErrorResponse(types.ErrorCodeForbidden, "No access to this space"))
 		return
 	}
 	at, err := h.activityTypesRepo.GetActivityTypeByID(typeID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
 	if at == nil || at.IsDeleted {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid activity type"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeInvalidRequest, "Invalid activity type"))
 		return
 	}
 	topicIDStr := c.Query("topicId")
@@ -390,7 +372,7 @@ func (h *ActivitiesHandler) GetActivitiesAnalysis(c *gin.Context) {
 		if e == nil {
 			startDate = &t
 		} else {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid startDate"})
+			c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, "invalid startDate"))
 			return
 		}
 	}
@@ -401,7 +383,7 @@ func (h *ActivitiesHandler) GetActivitiesAnalysis(c *gin.Context) {
 		if e == nil {
 			endDate = &t
 		} else {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid endDate"})
+			c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, "invalid endDate"))
 			return
 		}
 	}
@@ -417,8 +399,8 @@ func (h *ActivitiesHandler) GetActivitiesAnalysis(c *gin.Context) {
 		periodID,
 	)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
-	c.JSON(http.StatusOK, results)
+	c.JSON(http.StatusOK, types.NewSuccessResponse(results))
 }

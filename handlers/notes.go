@@ -30,13 +30,13 @@ func AuthMiddleware(secret string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header required"})
+			c.JSON(http.StatusUnauthorized, types.NewErrorResponse(types.ErrorCodeUnauthorized, "Authorization header required"))
 			c.Abort()
 			return
 		}
 		parts := strings.Split(authHeader, " ")
 		if len(parts) != 2 || parts[0] != "Bearer" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid authorization header"})
+			c.JSON(http.StatusUnauthorized, types.NewErrorResponse(types.ErrorCodeUnauthorized, "Invalid authorization header"))
 			c.Abort()
 			return
 		}
@@ -47,19 +47,19 @@ func AuthMiddleware(secret string) gin.HandlerFunc {
 			return []byte(secret), nil
 		})
 		if err != nil || !token.Valid {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+			c.JSON(http.StatusUnauthorized, types.NewErrorResponse(types.ErrorCodeInvalidToken, "Invalid token"))
 			c.Abort()
 			return
 		}
 		claims, ok := token.Claims.(jwt.MapClaims)
 		if !ok || !token.Valid {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
+			c.JSON(http.StatusUnauthorized, types.NewErrorResponse(types.ErrorCodeInvalidToken, "Invalid token claims"))
 			c.Abort()
 			return
 		}
 		userID, ok := claims["userId"].(float64)
 		if !ok {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "userId not found in token"})
+			c.JSON(http.StatusUnauthorized, types.NewErrorResponse(types.ErrorCodeInvalidToken, "userId not found in token"))
 			c.Abort()
 			return
 		}
@@ -74,19 +74,19 @@ func (h *NotesHandler) Register(c *gin.Context) {
 		Password string `json:"password"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, err.Error()))
 		return
 	}
 	if len(req.Username) < 3 || len(req.Username) > 50 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Username must be between 3 and 50 characters"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, "Username must be between 3 and 50 characters"))
 		return
 	}
 	user, err := h.repo.CreateUser(req.Username, req.Password)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to register user: " + err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, "Failed to register user: "+err.Error()))
 		return
 	}
-	c.JSON(http.StatusCreated, user)
+	c.JSON(http.StatusCreated, types.NewSuccessResponse(user))
 }
 
 func (h *NotesHandler) Login(c *gin.Context) {
@@ -95,16 +95,16 @@ func (h *NotesHandler) Login(c *gin.Context) {
 		Password string `json:"password"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, err.Error()))
 		return
 	}
 	user, err := h.repo.GetUserByUsername(req.Username)
 	if err != nil || user == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
+		c.JSON(http.StatusUnauthorized, types.NewErrorResponse(types.ErrorCodeUnauthorized, "Invalid username or password"))
 		return
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
+		c.JSON(http.StatusUnauthorized, types.NewErrorResponse(types.ErrorCodeUnauthorized, "Invalid username or password"))
 		return
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
@@ -113,10 +113,10 @@ func (h *NotesHandler) Login(c *gin.Context) {
 	})
 	tokenString, err := token.SignedString([]byte(c.MustGet("jwtSecret").(string)))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, "Failed to generate token"))
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"token": tokenString})
+	c.JSON(http.StatusOK, types.NewSuccessResponse(gin.H{"token": tokenString}))
 }
 
 func (h *NotesHandler) CreateNote(c *gin.Context) {
@@ -128,177 +128,177 @@ func (h *NotesHandler) CreateNote(c *gin.Context) {
 		ParentID *int      `json:"parentId"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, err.Error()))
 		return
 	}
 
 	topic, err := h.topicsRepo.GetTopicByID(req.TopicID)
 	if err != nil || topic == nil || topic.IsDeleted {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid topic"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeInvalidRequest, "Invalid topic"))
 		return
 	}
 
 	topicType := types.GetTopicTypeByID(topic.TypeID)
 	if topicType == nil || topicType.Name != "notebook" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Notes can only be created in notebook topics"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeInvalidRequest, "Notes can only be created in notebook topics"))
 		return
 	}
 
 	userID := c.GetInt("userId")
 	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, topic.SpaceID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
 	if roleID == 0 {
-		c.JSON(http.StatusForbidden, gin.H{"error": "No access to the space"})
+		c.JSON(http.StatusForbidden, types.NewErrorResponse(types.ErrorCodeForbidden, "No access to the space"))
 		return
 	}
 
 	dateStr := req.Date.Format(time.RFC3339)
 	note, err := h.repo.CreateNote(userID, req.Text, req.Tags, req.ParentID, &dateStr, req.TopicID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
 
-	c.JSON(http.StatusCreated, note)
+	c.JSON(http.StatusCreated, types.NewSuccessResponse(note))
 }
 
 func (h *NotesHandler) DeleteNote(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, "Invalid ID"))
 		return
 	}
 	note, err := h.repo.GetNoteByID(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
 	if note == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Note not found"})
+		c.JSON(http.StatusNotFound, types.NewErrorResponse(types.ErrorCodeNotFound, "Note not found"))
 		return
 	}
 	userID := c.GetInt("userId")
 	topic, err := h.topicsRepo.GetTopicByID(note.TopicID)
 	if err != nil || topic == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Topic error"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeInvalidRequest, "Topic error"))
 		return
 	}
 	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, topic.SpaceID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
 	if roleID == 0 {
-		c.JSON(http.StatusForbidden, gin.H{"error": "No access to the space"})
+		c.JSON(http.StatusForbidden, types.NewErrorResponse(types.ErrorCodeForbidden, "No access to the space"))
 		return
 	}
 	if roleID != globals.DefaultOwnerRoleID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Guests cannot delete notes"})
+		c.JSON(http.StatusForbidden, types.NewErrorResponse(types.ErrorCodeForbidden, "Guests cannot delete notes"))
 		return
 	}
 	if err := h.repo.UpdateNoteDeleted(id, true); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
-	c.Status(http.StatusNoContent)
+	c.JSON(http.StatusOK, types.NewSuccessResponse(gin.H{"message": "Note deleted successfully"}))
 }
 
 func (h *NotesHandler) RestoreNote(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, "Invalid ID"))
 		return
 	}
 	note, err := h.repo.GetNoteByID(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
 	if note == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Note not found"})
+		c.JSON(http.StatusNotFound, types.NewErrorResponse(types.ErrorCodeNotFound, "Note not found"))
 		return
 	}
 	userID := c.GetInt("userId")
 	topic, err := h.topicsRepo.GetTopicByID(note.TopicID)
 	if err != nil || topic == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Topic error"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeInvalidRequest, "Topic error"))
 		return
 	}
 	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, topic.SpaceID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
 	if roleID == 0 {
-		c.JSON(http.StatusForbidden, gin.H{"error": "No access to the space"})
+		c.JSON(http.StatusForbidden, types.NewErrorResponse(types.ErrorCodeForbidden, "No access to the space"))
 		return
 	}
 	if roleID != globals.DefaultOwnerRoleID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Guests cannot restore notes"})
+		c.JSON(http.StatusForbidden, types.NewErrorResponse(types.ErrorCodeForbidden, "Guests cannot restore notes"))
 		return
 	}
 	if err := h.repo.UpdateNoteDeleted(id, false); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
-	c.Status(http.StatusNoContent)
+	c.JSON(http.StatusOK, types.NewSuccessResponse(gin.H{"message": "Note restored successfully"}))
 }
 
 func (h *NotesHandler) GetNote(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, "Invalid ID"))
 		return
 	}
 	note, err := h.repo.GetNoteByID(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
-	if note == nil || note.IsDeleted {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Note not found"})
+	if note == nil {
+		c.JSON(http.StatusNotFound, types.NewErrorResponse(types.ErrorCodeNotFound, "Note not found"))
 		return
 	}
 	userID := c.GetInt("userId")
 	topic, err := h.topicsRepo.GetTopicByID(note.TopicID)
 	if err != nil || topic == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Topic error"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeInvalidRequest, "Topic error"))
 		return
 	}
 	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, topic.SpaceID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
 	if roleID == 0 {
-		c.JSON(http.StatusForbidden, gin.H{"error": "No access to the space"})
+		c.JSON(http.StatusForbidden, types.NewErrorResponse(types.ErrorCodeForbidden, "No access to the space"))
 		return
 	}
-	c.JSON(http.StatusOK, note)
+	c.JSON(http.StatusOK, types.NewSuccessResponse(note))
 }
 
 func (h *NotesHandler) GetNotes(c *gin.Context) {
 	userID := c.GetInt("userId")
 	spaceIDParam := c.Query("spaceId")
 	if spaceIDParam == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "spaceId is required"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, "spaceId is required"))
 		return
 	}
 	spaceID, err := strconv.Atoi(spaceIDParam)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid spaceId"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, "Invalid spaceId"))
 		return
 	}
 	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, spaceID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
 	if roleID == 0 {
-		c.JSON(http.StatusForbidden, gin.H{"error": "No access to the space"})
+		c.JSON(http.StatusForbidden, types.NewErrorResponse(types.ErrorCodeForbidden, "No access to the space"))
 		return
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -362,31 +362,31 @@ func (h *NotesHandler) GetNotes(c *gin.Context) {
 	}
 	notes, total, err := h.repo.GetNotes(userID, spaceID, topicID, filters)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
+	c.JSON(http.StatusOK, types.NewSuccessResponse(gin.H{
 		"notes": notes,
 		"total": total,
-	})
+	}))
 }
 
 func (h *NotesHandler) GetTagAutocomplete(c *gin.Context) {
 	text := c.Query("text")
 	spaceID, err := strconv.Atoi(c.Query("spaceId"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid spaceId"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, "invalid spaceId"))
 		return
 	}
 
 	userID := c.GetInt("userId")
 	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, spaceID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
 	if roleID == 0 {
-		c.JSON(http.StatusForbidden, gin.H{"error": "No access to the space"})
+		c.JSON(http.StatusForbidden, types.NewErrorResponse(types.ErrorCodeForbidden, "No access to the space"))
 		return
 	}
 
@@ -400,9 +400,9 @@ func (h *NotesHandler) GetTagAutocomplete(c *gin.Context) {
 
 	tags, err := h.repo.GetTagAutocomplete(text, spaceID, topicID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
 
-	c.JSON(http.StatusOK, tags)
+	c.JSON(http.StatusOK, types.NewSuccessResponse(tags))
 }

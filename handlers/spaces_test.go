@@ -20,9 +20,14 @@ func (s *E2ETestSuite) Test5_CreateSpace() {
 
 	var spaceResp map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&spaceResp)
-	id := int(spaceResp["id"].(float64))
-	s.createdSpaceID = id
-	s.True(s.createdSpaceID > 0)
+	if spaceResp["success"] != nil && spaceResp["success"].(bool) {
+		spaceData := spaceResp["data"].(map[string]interface{})
+		id := int(spaceData["id"].(float64))
+		s.createdSpaceID = id
+		s.True(s.createdSpaceID > 0)
+	} else {
+		s.Fail("Space creation failed")
+	}
 }
 
 func (s *E2ETestSuite) Test8_InviteGuest() {
@@ -59,18 +64,21 @@ func (s *E2ETestSuite) Test10_GetAccessibleSpaces() {
 	defer resp.Body.Close()
 	s.Equal(http.StatusOK, resp.StatusCode)
 
-	var spaces []map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&spaces)
+	var response map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&response)
+	s.True(response["success"].(bool))
+	spaces := response["data"].([]interface{})
 	s.True(len(spaces) >= 1)
 
 	found := false
 	for _, sp := range spaces {
-		if int(sp["id"].(float64)) == s.createdSpaceID {
+		space := sp.(map[string]interface{})
+		if int(space["id"].(float64)) == s.createdSpaceID {
 			found = true
-			s.Contains(sp, "name")
-			s.Contains(sp, "ownerId")
-			s.Contains(sp, "createdAt")
-			s.Contains(sp, "modifiedAt")
+			s.Contains(space, "name")
+			s.Contains(space, "ownerId")
+			s.Contains(space, "createdAt")
+			s.Contains(space, "modifiedAt")
 			break
 		}
 	}
@@ -161,13 +169,16 @@ func (s *E2ETestSuite) Test16_GetUsersInSpace_Success() {
 	defer resp.Body.Close()
 	s.Equal(http.StatusOK, resp.StatusCode)
 
-	var participants []map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&participants)
+	var response map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&response)
+	s.True(response["success"].(bool))
+	participants := response["data"].([]interface{})
 	s.True(len(participants) >= 1)
 
 	foundOwner := false
 	for _, p := range participants {
-		if int(p["id"].(float64)) == 1 {
+		participant := p.(map[string]interface{})
+		if int(participant["id"].(float64)) == 1 {
 			foundOwner = true
 			break
 		}
@@ -191,9 +202,11 @@ func (s *E2ETestSuite) Test17_GetUsersInSpace_ForbiddenForNonMember() {
 	defer loginResp.Body.Close()
 	s.Equal(http.StatusOK, loginResp.StatusCode)
 
-	var data map[string]string
+	var data map[string]interface{}
 	json.NewDecoder(loginResp.Body).Decode(&data)
-	outsiderToken := data["token"]
+	s.True(data["success"].(bool))
+	tokenData := data["data"].(map[string]interface{})
+	outsiderToken := tokenData["token"].(string)
 	s.NotEmpty(outsiderToken)
 
 	req, _ := http.NewRequest("GET", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/users", nil)

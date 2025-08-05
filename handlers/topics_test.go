@@ -25,8 +25,13 @@ func (s *E2ETestSuite) Test10_CreateTopicAsOwner() {
 
 	var topicResp map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&topicResp)
-	s.createdTopicID = int(topicResp["id"].(float64))
-	s.True(s.createdTopicID > 0)
+	if topicResp["success"] != nil && topicResp["success"].(bool) {
+		topicData := topicResp["data"].(map[string]interface{})
+		s.createdTopicID = int(topicData["id"].(float64))
+		s.True(s.createdTopicID > 0)
+	} else {
+		s.Fail("Topic creation failed")
+	}
 }
 
 func (s *E2ETestSuite) Test11_GuestCannotCreateTopic() {
@@ -75,15 +80,18 @@ func (s *E2ETestSuite) Test13_GetTopicsBySpaceIncludesDates() {
 	defer resp.Body.Close()
 	s.Equal(http.StatusOK, resp.StatusCode)
 
-	var topics []map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&topics)
+	var response map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&response)
+	s.True(response["success"].(bool))
+	topics := response["data"].([]interface{})
 	s.True(len(topics) > 0)
 
 	for _, t := range topics {
-		s.Contains(t, "id")
-		s.Contains(t, "name")
-		s.Contains(t, "typeId")
-		s.Contains(t, "createdAt")
-		s.Contains(t, "modifiedAt")
+		topic := t.(map[string]interface{})
+		s.Contains(topic, "id")
+		s.Contains(topic, "name")
+		s.Contains(topic, "typeId")
+		s.Contains(topic, "createdAt")
+		s.Contains(topic, "modifiedAt")
 	}
 }

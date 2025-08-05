@@ -4,6 +4,7 @@ import (
 	"errors"
 	"focuz-api/globals"
 	"focuz-api/repository"
+	"focuz-api/types"
 	"net/http"
 	"strconv"
 	"strings"
@@ -23,17 +24,17 @@ func NewActivityTypesHandler(r *repository.ActivityTypesRepository, s *repositor
 func (h *ActivityTypesHandler) CreateActivityType(c *gin.Context) {
 	spaceID, err := strconv.Atoi(c.Param("spaceId"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid space ID"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, "Invalid space ID"))
 		return
 	}
 	userID := c.GetInt("userId")
 	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, spaceID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
 	if roleID == 0 || roleID != globals.DefaultOwnerRoleID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "No permission"})
+		c.JSON(http.StatusForbidden, types.NewErrorResponse(types.ErrorCodeForbidden, "No permission"))
 		return
 	}
 
@@ -47,7 +48,7 @@ func (h *ActivityTypesHandler) CreateActivityType(c *gin.Context) {
 		CategoryID  *int     `json:"category_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, err.Error()))
 		return
 	}
 	validValueTypes := map[string]bool{
@@ -58,9 +59,7 @@ func (h *ActivityTypesHandler) CreateActivityType(c *gin.Context) {
 		"time":    true,
 	}
 	if !validValueTypes[req.ValueType] {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Invalid value_type. Allowed: integer, float, text, boolean, time",
-		})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, "Invalid value_type. Allowed: integer, float, text, boolean, time"))
 		return
 	}
 
@@ -71,28 +70,26 @@ func (h *ActivityTypesHandler) CreateActivityType(c *gin.Context) {
 		"percentage_true": true, "percentage_false": true,
 	}
 	if !validAggregations[strings.ToLower(req.Aggregation)] {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Invalid aggregation. Allowed: sum, avg, count, min, max, and, or, count_true, count_false, percentage_true, percentage_false",
-		})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, "Invalid aggregation. Allowed: sum, avg, count, min, max, and, or, count_true, count_false, percentage_true, percentage_false"))
 		return
 	}
 	if req.MinValue != nil && req.MaxValue != nil && *req.MinValue > *req.MaxValue {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "min_value cannot be greater than max_value"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, "min_value cannot be greater than max_value"))
 		return
 	}
 	if req.ValueType == "text" && strings.ToLower(req.Aggregation) != "count" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "text supports only count aggregation"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, "text supports only count aggregation"))
 		return
 	}
 	boolAggSet := map[string]bool{
 		"and": true, "or": true, "count_true": true, "count_false": true, "percentage_true": true, "percentage_false": true,
 	}
 	if req.ValueType == "boolean" && !boolAggSet[strings.ToLower(req.Aggregation)] {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid aggregation for boolean"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, "invalid aggregation for boolean"))
 		return
 	}
 	if req.ValueType == "time" && req.Unit != nil && *req.Unit != "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "time cannot have a unit"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, "time cannot have a unit"))
 		return
 	}
 
@@ -109,121 +106,121 @@ func (h *ActivityTypesHandler) CreateActivityType(c *gin.Context) {
 	)
 	if err != nil {
 		if errors.Is(err, errors.New("name conflict in this space")) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "type name already exists in this space"})
+			c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeConflict, "type name already exists in this space"))
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		}
 		return
 	}
-	c.JSON(http.StatusCreated, created)
+	c.JSON(http.StatusCreated, types.NewSuccessResponse(created))
 }
 
 func (h *ActivityTypesHandler) DeleteActivityType(c *gin.Context) {
 	spaceID, err := strconv.Atoi(c.Param("spaceId"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid space ID"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, "Invalid space ID"))
 		return
 	}
 	typeID, err := strconv.Atoi(c.Param("typeId"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid type ID"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, "Invalid type ID"))
 		return
 	}
 	userID := c.GetInt("userId")
 	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, spaceID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
 	if roleID == 0 || roleID != globals.DefaultOwnerRoleID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "No permission"})
+		c.JSON(http.StatusForbidden, types.NewErrorResponse(types.ErrorCodeForbidden, "No permission"))
 		return
 	}
 
 	activityType, err := h.repo.GetActivityTypeByID(typeID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
 	if activityType == nil || activityType.IsDeleted {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Activity type not found"})
+		c.JSON(http.StatusNotFound, types.NewErrorResponse(types.ErrorCodeNotFound, "Activity type not found"))
 		return
 	}
 	if activityType.IsDefault {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Cannot delete default activity type"})
+		c.JSON(http.StatusForbidden, types.NewErrorResponse(types.ErrorCodeForbidden, "Cannot delete default activity type"))
 		return
 	}
 
 	err = h.repo.UpdateActivityTypeDeleted(typeID, true)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
-	c.Status(http.StatusNoContent)
+	c.JSON(http.StatusOK, types.NewSuccessResponse(gin.H{"message": "Activity type deleted successfully"}))
 }
 
 func (h *ActivityTypesHandler) RestoreActivityType(c *gin.Context) {
 	spaceID, err := strconv.Atoi(c.Param("spaceId"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid space ID"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, "Invalid space ID"))
 		return
 	}
 	typeID, err := strconv.Atoi(c.Param("typeId"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid type ID"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, "Invalid type ID"))
 		return
 	}
 	userID := c.GetInt("userId")
 	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, spaceID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
 	if roleID == 0 || roleID != globals.DefaultOwnerRoleID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "No permission"})
+		c.JSON(http.StatusForbidden, types.NewErrorResponse(types.ErrorCodeForbidden, "No permission"))
 		return
 	}
 	activityType, err := h.repo.GetActivityTypeByID(typeID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
 	if activityType == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Activity type not found"})
+		c.JSON(http.StatusNotFound, types.NewErrorResponse(types.ErrorCodeNotFound, "Activity type not found"))
 		return
 	}
 	if activityType.IsDefault {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Cannot restore default activity type"})
+		c.JSON(http.StatusForbidden, types.NewErrorResponse(types.ErrorCodeForbidden, "Cannot restore default activity type"))
 		return
 	}
 	err = h.repo.UpdateActivityTypeDeleted(typeID, false)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
-	c.Status(http.StatusNoContent)
+	c.JSON(http.StatusOK, types.NewSuccessResponse(gin.H{"message": "Activity type restored successfully"}))
 }
 
 func (h *ActivityTypesHandler) GetActivityTypesBySpace(c *gin.Context) {
 	spaceID, err := strconv.Atoi(c.Param("spaceId"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid space ID"})
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, "Invalid space ID"))
 		return
 	}
 	userID := c.GetInt("userId")
 	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, spaceID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
 	if roleID == 0 {
-		c.JSON(http.StatusForbidden, gin.H{"error": "No access to the space"})
+		c.JSON(http.StatusForbidden, types.NewErrorResponse(types.ErrorCodeForbidden, "No access to the space"))
 		return
 	}
 	activityTypes, err := h.repo.GetActivityTypesBySpace(spaceID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
-	c.JSON(http.StatusOK, activityTypes)
+	c.JSON(http.StatusOK, types.NewSuccessResponse(activityTypes))
 }

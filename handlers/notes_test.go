@@ -28,8 +28,13 @@ func (s *E2ETestSuite) Test12_CreateNote() {
 
 	var noteResp map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&noteResp)
-	s.createdNoteID = int(noteResp["id"].(float64))
-	s.True(s.createdNoteID > 0)
+	if noteResp["success"] != nil && noteResp["success"].(bool) {
+		noteData := noteResp["data"].(map[string]interface{})
+		s.createdNoteID = int(noteData["id"].(float64))
+		s.True(s.createdNoteID > 0)
+	} else {
+		s.Fail("Note creation failed")
+	}
 }
 
 func (s *E2ETestSuite) Test13_CreateNoteReply() {
