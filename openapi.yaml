@@ -1,0 +1,1166 @@
+openapi: 3.0.0
+info:
+  title: Focuz API
+  description: API for a note-taking application with workspaces, topics, and activities
+  version: 1.0.0
+  contact:
+    name: Focuz Team
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: https://api.focuz.com
+    description: Production server
+
+paths:
+  /register:
+    post:
+      summary: User registration
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User successfully registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
+  /login:
+    post:
+      summary: User authentication
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Successful authentication
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
+  /spaces:
+    get:
+      summary: Get available workspaces
+      tags:
+        - Spaces
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of workspaces
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+    post:
+      summary: Create a workspace
+      tags:
+        - Spaces
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSpaceRequest'
+      responses:
+        '201':
+          description: Workspace created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
+  /spaces/{spaceId}:
+    patch:
+      summary: Update a workspace
+      tags:
+        - Spaces
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: spaceId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSpaceRequest'
+      responses:
+        '200':
+          description: Workspace updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
+  /spaces/{spaceId}/delete:
+    patch:
+      summary: Delete a workspace (soft delete)
+      tags:
+        - Spaces
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: spaceId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Workspace deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
+  /spaces/{spaceId}/restore:
+    patch:
+      summary: Restore a workspace
+      tags:
+        - Spaces
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: spaceId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Workspace restored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
+  /spaces/{spaceId}/users:
+    get:
+      summary: Get users in a workspace
+      tags:
+        - Spaces
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: spaceId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
+  /spaces/{spaceId}/invite:
+    post:
+      summary: Invite a user to a workspace
+      tags:
+        - Spaces
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: spaceId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InviteUserRequest'
+      responses:
+        '200':
+          description: User invited
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
+  /spaces/{spaceId}/users/{userId}:
+    delete:
+      summary: Remove a user from a workspace
+      tags:
+        - Spaces
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: spaceId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: User removed from workspace
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
+  /topics:
+    post:
+      summary: Create a topic
+      tags:
+        - Topics
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTopicRequest'
+      responses:
+        '201':
+          description: Topic created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
+  /topics/{id}:
+    patch:
+      summary: Update a topic
+      tags:
+        - Topics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTopicRequest'
+      responses:
+        '200':
+          description: Topic updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
+  /topics/{id}/delete:
+    patch:
+      summary: Delete a topic (soft delete)
+      tags:
+        - Topics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Topic deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
+  /topics/{id}/restore:
+    patch:
+      summary: Restore a topic
+      tags:
+        - Topics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Topic restored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
+  /spaces/{spaceId}/topics:
+    get:
+      summary: Get topics in a workspace
+      tags:
+        - Topics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: spaceId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: List of topics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
+  /topic-types:
+    get:
+      summary: Get topic types
+      tags:
+        - Topics
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of topic types
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
+  /notes:
+    get:
+      summary: Get notes
+      tags:
+        - Notes
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: topicId
+          in: query
+          schema:
+            type: integer
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: tags
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: List of notes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+    post:
+      summary: Create a note
+      tags:
+        - Notes
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateNoteRequest'
+      responses:
+        '201':
+          description: Note created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
+  /notes/{id}:
+    get:
+      summary: Get a note by ID
+      tags:
+        - Notes
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Note
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
+  /notes/{id}/delete:
+    patch:
+      summary: Delete a note (soft delete)
+      tags:
+        - Notes
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Note deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
+  /notes/{id}/restore:
+    patch:
+      summary: Restore a note
+      tags:
+        - Notes
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Note restored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
+  /tags/autocomplete:
+    get:
+      summary: Tag autocomplete
+      tags:
+        - Notes
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of tags
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
+  /activities:
+    get:
+      summary: Get activity analysis
+      tags:
+        - Activities
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: spaceId
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: topicId
+          in: query
+          schema:
+            type: integer
+        - name: activityTypeId
+          in: query
+          schema:
+            type: integer
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [day, week, month, year]
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Activity analysis
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+    post:
+      summary: Create an activity
+      tags:
+        - Activities
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateActivityRequest'
+      responses:
+        '201':
+          description: Activity created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
+  /activities/{activityId}:
+    patch:
+      summary: Update an activity
+      tags:
+        - Activities
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: activityId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateActivityRequest'
+      responses:
+        '200':
+          description: Activity updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
+  /activities/{activityId}/delete:
+    patch:
+      summary: Delete an activity (soft delete)
+      tags:
+        - Activities
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: activityId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Activity deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
+  /activities/{activityId}/restore:
+    patch:
+      summary: Restore an activity
+      tags:
+        - Activities
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: activityId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Activity restored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
+  /spaces/{spaceId}/activity-types:
+    get:
+      summary: Get activity types in a workspace
+      tags:
+        - Activity Types
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: spaceId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: List of activity types
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+    post:
+      summary: Create an activity type
+      tags:
+        - Activity Types
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: spaceId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateActivityTypeRequest'
+      responses:
+        '201':
+          description: Activity type created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
+  /spaces/{spaceId}/activity-types/{typeId}/delete:
+    patch:
+      summary: Delete an activity type (soft delete)
+      tags:
+        - Activity Types
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: spaceId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: typeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Activity type deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
+  /spaces/{spaceId}/activity-types/{typeId}/restore:
+    patch:
+      summary: Restore an activity type
+      tags:
+        - Activity Types
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: spaceId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: typeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Activity type restored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
+  /charts:
+    get:
+      summary: Get charts
+      tags:
+        - Charts
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of charts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+    post:
+      summary: Create a chart
+      tags:
+        - Charts
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateChartRequest'
+      responses:
+        '201':
+          description: Chart created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
+  /charts/{id}:
+    patch:
+      summary: Update a chart
+      tags:
+        - Charts
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateChartRequest'
+      responses:
+        '200':
+          description: Chart updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
+  /charts/{id}/delete:
+    patch:
+      summary: Delete a chart (soft delete)
+      tags:
+        - Charts
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Chart deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
+  /charts/{id}/restore:
+    patch:
+      summary: Restore a chart
+      tags:
+        - Charts
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Chart restored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
+  /chart-types:
+    get:
+      summary: Get chart types
+      tags:
+        - Charts
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of chart types
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
+  /period-types:
+    get:
+      summary: Get period types
+      tags:
+        - Charts
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of period types
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
+  /upload:
+    post:
+      summary: Upload a file
+      tags:
+        - Attachments
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                noteId:
+                  type: integer
+      responses:
+        '201':
+          description: File uploaded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
+  /files/{id}:
+    get:
+      summary: Get a file
+      tags:
+        - Attachments
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: File
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    APIResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+        error:
+          $ref: '#/components/schemas/APIError'
+      required:
+        - success
+
+    APIError:
+      type: object
+      properties:
+        code:
+          type: string
+          example: "VALIDATION_ERROR"
+        message:
+          type: string
+          example: "Invalid input data"
+        details:
+          type: object
+          additionalProperties: true
+
+    RegisterRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+          example: "john_doe"
+        password:
+          type: string
+          minLength: 6
+          example: "password123"
+
+    LoginRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          example: "john_doe"
+        password:
+          type: string
+          example: "password123"
+
+    LoginResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            token:
+              type: string
+              example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+    CreateSpaceRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          maxLength: 255
+          example: "My Workspace"
+
+    UpdateSpaceRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 255
+          example: "Updated Workspace Name"
+
+    InviteUserRequest:
+      type: object
+      required:
+        - username
+      properties:
+        username:
+          type: string
+          example: "jane_doe"
+
+    CreateTopicRequest:
+      type: object
+      required:
+        - spaceId
+        - name
+        - typeId
+      properties:
+        spaceId:
+          type: integer
+          example: 1
+        name:
+          type: string
+          maxLength: 255
+          example: "My Topic"
+        typeId:
+          type: integer
+          example: 1
+
+    UpdateTopicRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 255
+          example: "Updated Topic Name"
+
+    CreateNoteRequest:
+      type: object
+      required:
+        - text
+        - date
+        - topicId
+      properties:
+        text:
+          type: string
+          example: "This is my note content"
+        date:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+        topicId:
+          type: integer
+          example: 1
+        tags:
+          type: array
+          items:
+            type: string
+          example: ["work", "important"]
+        parentId:
+          type: integer
+          nullable: true
+          example: null
+
+    CreateActivityRequest:
+      type: object
+      required:
+        - typeId
+        - value
+      properties:
+        typeId:
+          type: integer
+          example: 1
+        value:
+          type: string
+          example: "5"
+        noteId:
+          type: integer
+          nullable: true
+          example: 1
+
+    UpdateActivityRequest:
+      type: object
+      required:
+        - value
+      properties:
+        value:
+          type: string
+          example: "7"
+
+    CreateActivityTypeRequest:
+      type: object
+      required:
+        - name
+        - value_type
+        - aggregation
+      properties:
+        name:
+          type: string
+          maxLength: 255
+          example: "mood"
+        value_type:
+          type: string
+          enum: [integer, float, text, boolean, time]
+          example: "integer"
+        unit:
+          type: string
+          nullable: true
+          example: null
+        min_value:
+          type: number
+          nullable: true
+          example: 1
+        max_value:
+          type: number
+          nullable: true
+          example: 10
+        aggregation:
+          type: string
+          enum: [sum, avg, count, min, max, and, or, count_true, count_false, percentage_true, percentage_false]
+          example: "avg"
+        category_id:
+          type: integer
+          nullable: true
+          example: 1
+
+    CreateChartRequest:
+      type: object
+      required:
+        - topicId
+        - kind
+        - activityTypeId
+        - period
+      properties:
+        topicId:
+          type: integer
+          example: 1
+        kind:
+          type: string
+          example: "line"
+        activityTypeId:
+          type: integer
+          example: 1
+        period:
+          type: string
+          example: "week"
+
+    UpdateChartRequest:
+      type: object
+      properties:
+        kind:
+          type: string
+          example: "bar"
+        period:
+          type: string
+          example: "month" 
