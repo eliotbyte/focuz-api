@@ -25,9 +25,9 @@ func (h *TopicsHandler) GetTopicTypes(c *gin.Context) {
 
 func (h *TopicsHandler) CreateTopic(c *gin.Context) {
 	var req struct {
-		SpaceID int    `json:"spaceId"`
-		Name    string `json:"name"`
-		TypeID  int    `json:"typeId"`
+		SpaceID int    `json:"spaceId" binding:"required"`
+		Name    string `json:"name" binding:"required"`
+		TypeID  int    `json:"typeId" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, err.Error()))
@@ -70,7 +70,7 @@ func (h *TopicsHandler) UpdateTopic(c *gin.Context) {
 		return
 	}
 	var req struct {
-		Name string `json:"name"`
+		Name string `json:"name" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, err.Error()))

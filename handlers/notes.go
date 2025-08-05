@@ -70,8 +70,8 @@ func AuthMiddleware(secret string) gin.HandlerFunc {
 
 func (h *NotesHandler) Register(c *gin.Context) {
 	var req struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
+		Username string `json:"username" binding:"required"`
+		Password string `json:"password" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, err.Error()))
@@ -91,8 +91,8 @@ func (h *NotesHandler) Register(c *gin.Context) {
 
 func (h *NotesHandler) Login(c *gin.Context) {
 	var req struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
+		Username string `json:"username" binding:"required"`
+		Password string `json:"password" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, err.Error()))
@@ -121,9 +121,9 @@ func (h *NotesHandler) Login(c *gin.Context) {
 
 func (h *NotesHandler) CreateNote(c *gin.Context) {
 	var req struct {
-		Text     string    `json:"text"`
-		Date     time.Time `json:"date"`
-		TopicID  int       `json:"topicId"`
+		Text     string    `json:"text" binding:"required"`
+		Date     time.Time `json:"date" binding:"required"`
+		TopicID  int       `json:"topicId" binding:"required"`
 		Tags     []string  `json:"tags"`
 		ParentID *int      `json:"parentId"`
 	}

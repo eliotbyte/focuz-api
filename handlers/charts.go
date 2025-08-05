@@ -41,10 +41,10 @@ func (h *ChartsHandler) GetPeriodTypes(c *gin.Context) {
 
 func (h *ChartsHandler) CreateChart(c *gin.Context) {
 	var req struct {
-		TopicID        int `json:"topicId"`
-		KindID         int `json:"kindId"`
-		ActivityTypeID int `json:"activityTypeId"`
-		PeriodID       int `json:"periodId"`
+		TopicID        int `json:"topicId" binding:"required"`
+		KindID         int `json:"kindId" binding:"required"`
+		ActivityTypeID int `json:"activityTypeId" binding:"required"`
+		PeriodID       int `json:"periodId" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, err.Error()))

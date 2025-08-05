@@ -21,7 +21,7 @@ func NewSpacesHandler(spacesRepo *repository.SpacesRepository, rolesRepo *reposi
 
 func (h *SpacesHandler) CreateSpace(c *gin.Context) {
 	var req struct {
-		Name string `json:"name"`
+		Name string `json:"name" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, err.Error()))
@@ -53,7 +53,7 @@ func (h *SpacesHandler) UpdateSpace(c *gin.Context) {
 		return
 	}
 	var req struct {
-		Name string `json:"name"`
+		Name string `json:"name" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, err.Error()))
@@ -144,7 +144,7 @@ func (h *SpacesHandler) InviteUser(c *gin.Context) {
 		return
 	}
 	var req struct {
-		UserID int `json:"userId"`
+		UserID int `json:"userId" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, err.Error()))

@@ -40,8 +40,8 @@ func NewActivitiesHandler(
 
 func (h *ActivitiesHandler) CreateActivity(c *gin.Context) {
 	var req struct {
-		TypeID int    `json:"typeId"`
-		Value  string `json:"value"`
+		TypeID int    `json:"typeId" binding:"required"`
+		Value  string `json:"value" binding:"required"`
 		NoteID *int   `json:"note_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -193,7 +193,7 @@ func (h *ActivitiesHandler) UpdateActivity(c *gin.Context) {
 		return
 	}
 	var req struct {
-		Value  string `json:"value"`
+		Value  string `json:"value" binding:"required"`
 		NoteID *int   `json:"note_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {

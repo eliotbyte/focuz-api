@@ -39,12 +39,12 @@ func (h *ActivityTypesHandler) CreateActivityType(c *gin.Context) {
 	}
 
 	var req struct {
-		Name        string   `json:"name"`
-		ValueType   string   `json:"value_type"`
+		Name        string   `json:"name" binding:"required"`
+		ValueType   string   `json:"value_type" binding:"required"`
 		Unit        *string  `json:"unit"`
 		MinValue    *float64 `json:"min_value"`
 		MaxValue    *float64 `json:"max_value"`
-		Aggregation string   `json:"aggregation"`
+		Aggregation string   `json:"aggregation" binding:"required"`
 		CategoryID  *int     `json:"category_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
