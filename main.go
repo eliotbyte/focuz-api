@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"focuz-api/handlers"
 	"focuz-api/initializers"
+	"focuz-api/middleware"
 	"focuz-api/repository"
 	"log"
 	"os"
@@ -89,6 +90,7 @@ func main() {
 	chartsHandler := handlers.NewChartsHandler(chartsRepo, spacesRepo, topicsRepo, activityTypesRepo)
 
 	r := gin.Default()
+	r.Use(middleware.CORSMiddleware())
 
 	r.POST("/register", notesHandler.Register)
 	r.POST("/login", func(c *gin.Context) {
