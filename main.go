@@ -8,6 +8,7 @@ import (
 	"focuz-api/repository"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -77,7 +78,7 @@ func main() {
 
 	notesHandler := handlers.NewNotesHandler(notesRepo, spacesRepo, topicsRepo)
 	spacesHandler := handlers.NewSpacesHandler(spacesRepo, rolesRepo)
-	topicsHandler := handlers.NewTopicsHandler(topicsRepo, spacesRepo)
+	topicsHandler := handlers.NewTopicsHandler(topicsRepo, spacesRepo, rolesRepo)
 	activityTypesHandler := handlers.NewActivityTypesHandler(activityTypesRepo, spacesRepo)
 	activitiesHandler := handlers.NewActivitiesHandler(
 		activitiesRepo,
@@ -89,7 +90,28 @@ func main() {
 	attachmentsHandler := handlers.NewAttachmentsHandler(attachmentsRepo, notesRepo, spacesRepo, topicsRepo)
 	chartsHandler := handlers.NewChartsHandler(chartsRepo, spacesRepo, topicsRepo, activityTypesRepo)
 
+	// Set Gin to release mode in production
+	if os.Getenv("GIN_MODE") == "release" || strings.ToLower(os.Getenv("APP_ENV")) == "production" {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
 	r := gin.Default()
+
+	// Configure trusted proxies for correct client IP handling in production
+	trustedProxies := os.Getenv("TRUSTED_PROXIES")
+	if trustedProxies != "" {
+		parts := strings.Split(trustedProxies, ",")
+		for i := range parts {
+			parts[i] = strings.TrimSpace(parts[i])
+		}
+		if err := r.SetTrustedProxies(parts); err != nil {
+			log.Fatalf("Invalid TRUSTED_PROXIES: %v", err)
+		}
+	} else {
+		// Default to loopback only; override via TRUSTED_PROXIES in production
+		_ = r.SetTrustedProxies([]string{"127.0.0.1"})
+	}
+
 	r.Use(middleware.CORSMiddleware())
 
 	r.POST("/register", notesHandler.Register)

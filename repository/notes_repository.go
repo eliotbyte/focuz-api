@@ -5,6 +5,7 @@ import (
 	"focuz-api/initializers"
 	"focuz-api/models"
 	"strconv"
+	"strings"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -285,14 +286,39 @@ func (r *NotesRepository) GetNotes(userID, spaceID int, topicID *int, filters mo
 		params = append(params, *filters.SearchQuery)
 		idx++
 	}
+
+	// Add date filters
+	if filters.DateFrom != nil {
+		conditions = append(conditions, "n.date >= $"+strconv.Itoa(idx))
+		params = append(params, *filters.DateFrom)
+		idx++
+	}
+	if filters.DateTo != nil {
+		conditions = append(conditions, "n.date <= $"+strconv.Itoa(idx))
+		params = append(params, *filters.DateTo)
+		idx++
+	}
+
 	query := `
 		SELECT n.id, n.user_id, n.text, n.created_at, n.modified_at, n.date, 
 		       n.parent_id, n.reply_count, n.is_deleted, n.topic_id
 		FROM note n
 		INNER JOIN topic t ON n.topic_id = t.id
 	`
-	if len(filters.IncludeTags) > 0 {
-		for _, tagVal := range filters.IncludeTags {
+
+	// Process tags with include/exclude logic
+	var includeTags []string
+	var excludeTags []string
+	for _, tag := range filters.Tags {
+		if strings.HasPrefix(tag, "!") {
+			excludeTags = append(excludeTags, strings.TrimPrefix(tag, "!"))
+		} else {
+			includeTags = append(includeTags, tag)
+		}
+	}
+
+	if len(includeTags) > 0 {
+		for _, tagVal := range includeTags {
 			query += " INNER JOIN note_to_tag nt_" + tagVal + " ON nt_" + tagVal + ".note_id = n.id " +
 				" INNER JOIN tag tg_" + tagVal + " ON tg_" + tagVal + ".id = nt_" + tagVal + ".tag_id AND tg_" + tagVal + ".name = '" + tagVal + "' "
 		}
@@ -300,8 +326,8 @@ func (r *NotesRepository) GetNotes(userID, spaceID int, topicID *int, filters mo
 	if len(conditions) > 0 {
 		query += " WHERE " + joinConditions(conditions, " AND ")
 	}
-	if len(filters.ExcludeTags) > 0 {
-		for _, exTag := range filters.ExcludeTags {
+	if len(excludeTags) > 0 {
+		for _, exTag := range excludeTags {
 			query += " AND NOT EXISTS (SELECT 1 FROM note_to_tag xnt INNER JOIN tag xt ON xt.id = xnt.tag_id WHERE xnt.note_id = n.id AND xt.name = '" + exTag + "')"
 		}
 	}
@@ -401,8 +427,8 @@ func (r *NotesRepository) GetNotes(userID, spaceID int, topicID *int, filters mo
 		FROM note n
 		INNER JOIN topic t ON n.topic_id = t.id
 	`
-	if len(filters.IncludeTags) > 0 {
-		for _, tagVal := range filters.IncludeTags {
+	if len(includeTags) > 0 {
+		for _, tagVal := range includeTags {
 			countQuery += " INNER JOIN note_to_tag nt_" + tagVal + " ON nt_" + tagVal + ".note_id = n.id " +
 				" INNER JOIN tag tg_" + tagVal + " ON tg_" + tagVal + ".id = nt_" + tagVal + ".tag_id AND tg_" + tagVal + ".name = '" + tagVal + "' "
 		}
@@ -410,8 +436,8 @@ func (r *NotesRepository) GetNotes(userID, spaceID int, topicID *int, filters mo
 	if len(conditions) > 0 {
 		countQuery += " WHERE " + joinConditions(conditions, " AND ")
 	}
-	if len(filters.ExcludeTags) > 0 {
-		for _, exTag := range filters.ExcludeTags {
+	if len(excludeTags) > 0 {
+		for _, exTag := range excludeTags {
 			countQuery += " AND NOT EXISTS (SELECT 1 FROM note_to_tag xnt INNER JOIN tag xt ON xt.id = xnt.tag_id WHERE xnt.note_id = n.id AND xt.name = '" + exTag + "')"
 		}
 	}

@@ -11,6 +11,8 @@ import (
 
 	"focuz-api/models"
 
+	"fmt"
+
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
@@ -63,6 +65,10 @@ func AuthMiddleware(secret string) gin.HandlerFunc {
 			c.Abort()
 			return
 		}
+
+		// Debug logging
+		fmt.Printf("AuthMiddleware: userID=%d, path=%s\n", int(userID), c.Request.URL.Path)
+
 		c.Set("userId", int(userID))
 		c.Next()
 	}
@@ -138,12 +144,6 @@ func (h *NotesHandler) CreateNote(c *gin.Context) {
 		return
 	}
 
-	topicType := types.GetTopicTypeByID(topic.TypeID)
-	if topicType == nil || topicType.Name != "notebook" {
-		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeInvalidRequest, "Notes can only be created in notebook topics"))
-		return
-	}
-
 	userID := c.GetInt("userId")
 	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, topic.SpaceID)
 	if err != nil {
@@ -152,6 +152,18 @@ func (h *NotesHandler) CreateNote(c *gin.Context) {
 	}
 	if roleID == 0 {
 		c.JSON(http.StatusForbidden, types.NewErrorResponse(types.ErrorCodeForbidden, "No access to the space"))
+		return
+	}
+
+	topicType := types.GetTopicTypeByID(topic.TypeID)
+	if topicType == nil {
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeInvalidRequest, "Invalid topic type"))
+		return
+	}
+
+	// Guests can only create notes in notebook topics
+	if roleID != globals.DefaultOwnerRoleID && topicType.Name != "notebook" {
+		c.JSON(http.StatusForbidden, types.NewErrorResponse(types.ErrorCodeForbidden, "Guests can only create notes in notebook topics"))
 		return
 	}
 
@@ -313,8 +325,7 @@ func (h *NotesHandler) GetNotes(c *gin.Context) {
 			topicID = &tmp
 		}
 	}
-	includeTags := c.QueryArray("includeTags")
-	excludeTags := c.QueryArray("excludeTags")
+	tags := c.QueryArray("tags")
 	notReplyParam := c.Query("notReply")
 	notReply := false
 	if strings.ToLower(notReplyParam) == "true" {
@@ -331,6 +342,20 @@ func (h *NotesHandler) GetNotes(c *gin.Context) {
 		tmp, err := strconv.Atoi(parentIDParam)
 		if err == nil {
 			parentID = &tmp
+		}
+	}
+
+	// Parse date filters
+	var dateFrom *time.Time
+	if dateFromStr := c.Query("dateFrom"); dateFromStr != "" {
+		if parsed, err := time.Parse("2006-01-02", dateFromStr); err == nil {
+			dateFrom = &parsed
+		}
+	}
+	var dateTo *time.Time
+	if dateToStr := c.Query("dateTo"); dateToStr != "" {
+		if parsed, err := time.Parse("2006-01-02", dateToStr); err == nil {
+			dateTo = &parsed
 		}
 	}
 
@@ -352,8 +377,7 @@ func (h *NotesHandler) GetNotes(c *gin.Context) {
 	}
 
 	filters := models.NoteFilters{
-		IncludeTags: includeTags,
-		ExcludeTags: excludeTags,
+		Tags:        tags,
 		NotReply:    notReply,
 		Page:        pagination.Page,
 		PageSize:    pagination.PageSize,
@@ -361,6 +385,8 @@ func (h *NotesHandler) GetNotes(c *gin.Context) {
 		ParentID:    parentID,
 		SortField:   sortField,
 		SortOrder:   sortOrder,
+		DateFrom:    dateFrom,
+		DateTo:      dateTo,
 	}
 	notes, total, err := h.repo.GetNotes(userID, spaceID, topicID, filters)
 	if err != nil {

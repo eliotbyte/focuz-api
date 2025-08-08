@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"errors"
+	"fmt"
 	"focuz-api/globals"
 	"focuz-api/repository"
 	"focuz-api/types"
@@ -40,12 +40,14 @@ func (h *ActivityTypesHandler) CreateActivityType(c *gin.Context) {
 
 	var req struct {
 		Name        string   `json:"name" binding:"required"`
-		ValueType   string   `json:"value_type" binding:"required"`
+		ValueType   string   `json:"valueType" binding:"required"`
 		Unit        *string  `json:"unit"`
-		MinValue    *float64 `json:"min_value"`
-		MaxValue    *float64 `json:"max_value"`
+		MinValue    *float64 `json:"minValue"`
+		MaxValue    *float64 `json:"maxValue"`
 		Aggregation string   `json:"aggregation" binding:"required"`
-		CategoryID  *int     `json:"category_id"`
+		CategoryID  *int     `json:"categoryId"`
+		SpaceID     *int     `json:"spaceId"`
+		IsDefault   *bool    `json:"isDefault"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, err.Error()))
@@ -105,7 +107,8 @@ func (h *ActivityTypesHandler) CreateActivityType(c *gin.Context) {
 		req.Unit,
 	)
 	if err != nil {
-		if errors.Is(err, errors.New("name conflict in this space")) {
+		fmt.Printf("CreateActivityType error: %v\n", err)
+		if strings.Contains(err.Error(), "name conflict in this space") {
 			c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeConflict, "type name already exists in this space"))
 		} else {
 			c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
@@ -198,7 +201,15 @@ func (h *ActivityTypesHandler) RestoreActivityType(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
-	c.JSON(http.StatusOK, types.NewSuccessResponse(gin.H{"message": "Activity type restored successfully"}))
+
+	// Get the restored activity type to return in response
+	restoredActivityType, err := h.repo.GetActivityTypeByID(typeID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusCreated, types.NewSuccessResponse(restoredActivityType))
 }
 
 func (h *ActivityTypesHandler) GetActivityTypesBySpace(c *gin.Context) {

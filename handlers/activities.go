@@ -72,15 +72,19 @@ func (h *ActivitiesHandler) CreateActivity(c *gin.Context) {
 			return
 		}
 		spaceID = topic.SpaceID
-		roleID, rerr := h.spacesRepo.GetUserRoleIDInSpace(userID, spaceID)
-		if rerr != nil {
-			c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, rerr.Error()))
-			return
-		}
-		if roleID == 0 {
-			c.JSON(http.StatusForbidden, types.NewErrorResponse(types.ErrorCodeForbidden, "No access to this note"))
-			return
-		}
+	} else {
+		// If no note is specified, get space ID from activity type
+		spaceID = activityType.SpaceID
+	}
+
+	roleID, rerr := h.spacesRepo.GetUserRoleIDInSpace(userID, spaceID)
+	if rerr != nil {
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, rerr.Error()))
+		return
+	}
+	if roleID == 0 {
+		c.JSON(http.StatusForbidden, types.NewErrorResponse(types.ErrorCodeForbidden, "No access to this space"))
+		return
 	}
 
 	checkedValue, err := h.validateActivityValue(activityType, req.Value)
@@ -91,7 +95,11 @@ func (h *ActivitiesHandler) CreateActivity(c *gin.Context) {
 
 	created, err := h.activitiesRepo.CreateActivity(userID, req.TypeID, checkedValue, req.NoteID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
+		if strings.Contains(err.Error(), "activity with this type already exists for the given note") {
+			c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeConflict, err.Error()))
+		} else {
+			c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
+		}
 		return
 	}
 	c.JSON(http.StatusCreated, types.NewSuccessResponse(created))

@@ -21,30 +21,12 @@ type E2ETestSuite struct {
 }
 
 func (s *E2ETestSuite) SetupSuite() {
-	s.baseURL = "http://localhost:8080"
-}
-
-func (s *E2ETestSuite) getGuestUserID() int {
-	body := `{"username":"guest","password":"guestpass"}`
-	req, _ := http.NewRequest("POST", s.baseURL+"/login", bytes.NewBuffer([]byte(body)))
-	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return 0
+	// Use test API container name when running in Docker, localhost otherwise
+	if os.Getenv("E2E") != "" {
+		s.baseURL = "http://test-api:8080"
+	} else {
+		s.baseURL = "http://localhost:8080"
 	}
-	defer resp.Body.Close()
-
-	var data map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&data)
-	if data["success"] != nil && data["success"].(bool) {
-		tokenData := data["data"].(map[string]interface{})
-		if tokenData["token"] != nil {
-			return 2
-		}
-	}
-	return 0
 }
 
 func (s *E2ETestSuite) createTopic(name string, typeID int) int {

@@ -38,12 +38,19 @@ func (r *SpacesRepository) CreateSpace(name string, ownerID int) (*models.Space,
 		return nil, err
 	}
 
-	// The role ID of the "owner" is passed in as ownerID here.
+	// Get the owner role ID from the role table
+	var ownerRoleID int
+	err = tx.QueryRow("SELECT id FROM role WHERE name = 'owner'").Scan(&ownerRoleID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Add the owner to the space with the correct role_id
 	_, err = tx.Exec(`
 		INSERT INTO user_to_space (user_id, space_id, role_id)
 		VALUES ($1, $2, $3)
-		ON CONFLICT (user_id, space_id) DO NOTHING
-	`, ownerID, spaceID, ownerID)
+		ON CONFLICT (user_id, space_id) DO UPDATE SET role_id = EXCLUDED.role_id
+	`, ownerID, spaceID, ownerRoleID)
 	if err != nil {
 		return nil, err
 	}
@@ -79,10 +86,11 @@ func (r *SpacesRepository) GetUserRoleIDInSpace(userID, spaceID int) (int, error
 		FROM user_to_space
 		WHERE user_id = $1 AND space_id = $2
 	`, userID, spaceID).Scan(&roleID)
-	if err == sql.ErrNoRows {
-		return 0, nil
-	}
+
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return 0, nil
+		}
 		return 0, err
 	}
 	return roleID, nil
@@ -268,4 +276,21 @@ func (r *SpacesRepository) UpdateSpaceName(spaceID int, name string) error {
 		WHERE id = $2
 	`, name, spaceID)
 	return err
+}
+
+// GetUserByUsername retrieves a user by their username
+func (r *SpacesRepository) GetUserByUsername(username string) (*models.User, error) {
+	var user models.User
+	err := r.db.QueryRow(`
+		SELECT id, username, password_hash, created_at
+		FROM users
+		WHERE username = $1
+	`, username).Scan(&user.ID, &user.Username, &user.PasswordHash, &user.CreatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
 }

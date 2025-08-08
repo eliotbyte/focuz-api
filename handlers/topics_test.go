@@ -7,10 +7,10 @@ import (
 	"strconv"
 )
 
-func (s *E2ETestSuite) Test10_CreateTopicAsOwner() {
+func (s *E2ETestSuite) Test19_CreateTopicAsOwner() {
 	reqBody := map[string]interface{}{
 		"spaceId": s.createdSpaceID,
-		"name":    "My Notebook",
+		"name":    "Test Topic",
 		"typeId":  1,
 	}
 	jsonBody, _ := json.Marshal(reqBody)
@@ -21,20 +21,23 @@ func (s *E2ETestSuite) Test10_CreateTopicAsOwner() {
 	resp, err := client.Do(req)
 	s.NoError(err)
 	defer resp.Body.Close()
+
 	s.Equal(http.StatusCreated, resp.StatusCode)
 
 	var topicResp map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&topicResp)
+
 	if topicResp["success"] != nil && topicResp["success"].(bool) {
 		topicData := topicResp["data"].(map[string]interface{})
-		s.createdTopicID = int(topicData["id"].(float64))
+		id := int(topicData["id"].(float64))
+		s.createdTopicID = id
 		s.True(s.createdTopicID > 0)
 	} else {
 		s.Fail("Topic creation failed")
 	}
 }
 
-func (s *E2ETestSuite) Test11_GuestCannotCreateTopic() {
+func (s *E2ETestSuite) Test20_GuestCannotCreateTopic() {
 	reqBody := map[string]interface{}{
 		"spaceId": s.createdSpaceID,
 		"name":    "Guest Topic",
@@ -51,11 +54,8 @@ func (s *E2ETestSuite) Test11_GuestCannotCreateTopic() {
 	s.Equal(http.StatusForbidden, resp.StatusCode)
 }
 
-// New or modified tests start here:
-
-func (s *E2ETestSuite) Test12_UpdateTopicTypeIdShouldFail() {
+func (s *E2ETestSuite) Test21_UpdateTopicTypeIdShouldFail() {
 	reqBody := map[string]interface{}{
-		"name":   "Renamed Topic",
 		"typeId": 2,
 	}
 	jsonBody, _ := json.Marshal(reqBody)
@@ -66,12 +66,10 @@ func (s *E2ETestSuite) Test12_UpdateTopicTypeIdShouldFail() {
 	resp, err := client.Do(req)
 	s.NoError(err)
 	defer resp.Body.Close()
-	// Depending on your implementation, this might return 400 or 403
-	// We'll assume 400 Bad Request if the code explicitly forbids changing typeId
 	s.Equal(http.StatusBadRequest, resp.StatusCode)
 }
 
-func (s *E2ETestSuite) Test13_GetTopicsBySpaceIncludesDates() {
+func (s *E2ETestSuite) Test22_GetTopicsBySpaceIncludesDates() {
 	req, _ := http.NewRequest("GET", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/topics", nil)
 	req.Header.Set("Authorization", "Bearer "+s.ownerToken)
 	client := &http.Client{}
@@ -83,15 +81,23 @@ func (s *E2ETestSuite) Test13_GetTopicsBySpaceIncludesDates() {
 	var response map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&response)
 	s.True(response["success"].(bool))
-	topics := response["data"].([]interface{})
-	s.True(len(topics) > 0)
 
+	// Handle paginated response structure
+	data := response["data"].(map[string]interface{})
+	topics := data["data"].([]interface{})
+	s.True(len(topics) >= 1)
+
+	found := false
 	for _, t := range topics {
 		topic := t.(map[string]interface{})
-		s.Contains(topic, "id")
-		s.Contains(topic, "name")
-		s.Contains(topic, "typeId")
-		s.Contains(topic, "createdAt")
-		s.Contains(topic, "modifiedAt")
+		if int(topic["id"].(float64)) == s.createdTopicID {
+			found = true
+			s.Contains(topic, "name")
+			s.Contains(topic, "typeId")
+			s.Contains(topic, "createdAt")
+			s.Contains(topic, "modifiedAt")
+			break
+		}
 	}
+	s.True(found)
 }

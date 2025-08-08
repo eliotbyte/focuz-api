@@ -29,15 +29,8 @@ func (h *SpacesHandler) CreateSpace(c *gin.Context) {
 	}
 	userID := c.GetInt("userId")
 
-	// We treat the new space creation as "owner" role, using the global default.
-	space, err := h.spacesRepo.CreateSpace(req.Name, globals.DefaultOwnerRoleID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
-		return
-	}
-
-	// Invite the current user with the owner role.
-	err = h.spacesRepo.InviteUserToSpace(userID, space.ID, globals.DefaultOwnerRoleID)
+	// Create the space with the current user as owner
+	space, err := h.spacesRepo.CreateSpace(req.Name, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
@@ -144,18 +137,31 @@ func (h *SpacesHandler) InviteUser(c *gin.Context) {
 		return
 	}
 	var req struct {
-		UserID int `json:"userId" binding:"required"`
+		Username string `json:"username" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, err.Error()))
 		return
 	}
+
+	// Get user by username
+	user, err := h.spacesRepo.GetUserByUsername(req.Username)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, "Failed to find user"))
+		return
+	}
+	if user == nil {
+		c.JSON(http.StatusNotFound, types.NewErrorResponse(types.ErrorCodeNotFound, "User not found"))
+		return
+	}
+
 	roleGuest, err := h.rolesRepo.GetRoleByName("guest")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, "Role not found"))
 		return
 	}
-	err = h.spacesRepo.InviteUserToSpace(req.UserID, spaceID, roleGuest.ID)
+
+	err = h.spacesRepo.InviteUserToSpace(user.ID, spaceID, roleGuest.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
@@ -211,6 +217,13 @@ func (h *SpacesHandler) RemoveUser(c *gin.Context) {
 		c.JSON(http.StatusNotFound, types.NewErrorResponse(types.ErrorCodeNotFound, "User not found in space"))
 		return
 	}
+
+	// Prevent removing the owner
+	if targetRoleID == globals.DefaultOwnerRoleID {
+		c.JSON(http.StatusForbidden, types.NewErrorResponse(types.ErrorCodeForbidden, "Cannot remove owner from space"))
+		return
+	}
+
 	err = h.spacesRepo.RemoveUserFromSpace(userToRemoveID, spaceID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))

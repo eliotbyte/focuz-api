@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 
+	"mime/multipart"
+
 	"github.com/gin-gonic/gin"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -63,43 +65,62 @@ func (h *AttachmentsHandler) UploadFile(c *gin.Context) {
 		return
 	}
 
-	file, header, err := c.Request.FormFile("file")
+	file, err := c.FormFile("file")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, "file is required"))
 		return
 	}
-	defer file.Close()
 
-	contentType := header.Header.Get("Content-Type")
-	fileSize := header.Size
-
-	if err := initializers.CheckFileAllowed(fileSize, contentType); err != nil {
+	// Check if file type is allowed
+	if err := initializers.CheckFileAllowed(file.Size, file.Header.Get("Content-Type")); err != nil {
 		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, err.Error()))
 		return
 	}
 
-	attID, err := h.attachmentsRepo.CreateAttachment(noteID, header.Filename, contentType, fileSize)
+	// Upload file to MinIO
+	attachmentID, err := h.uploadFileToMinIO(file, noteID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
 	}
 
+	c.JSON(http.StatusCreated, types.NewSuccessResponse(map[string]interface{}{
+		"attachment_id": attachmentID,
+		"filename":      file.Filename,
+		"size":          file.Size,
+	}))
+}
+
+func (h *AttachmentsHandler) uploadFileToMinIO(file *multipart.FileHeader, noteID int) (string, error) {
+	// Create attachment record
+	attachmentID, err := h.attachmentsRepo.CreateAttachment(noteID, file.Filename, file.Header.Get("Content-Type"), file.Size)
+	if err != nil {
+		return "", err
+	}
+
+	// Open the file
+	src, err := file.Open()
+	if err != nil {
+		return "", err
+	}
+	defer src.Close()
+
+	// Upload to MinIO
 	_, err = initializers.MinioClient.PutObject(
 		context.Background(),
 		initializers.Conf.Bucket,
-		attID,
-		file,
-		fileSize,
+		attachmentID,
+		src,
+		file.Size,
 		minio.PutObjectOptions{
-			ContentType: contentType,
+			ContentType: file.Header.Get("Content-Type"),
 		},
 	)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, "failed to upload to minio"))
-		return
+		return "", err
 	}
 
-	c.JSON(http.StatusCreated, types.NewSuccessResponse(gin.H{"attachment_id": attID}))
+	return attachmentID, nil
 }
 
 func (h *AttachmentsHandler) GetFile(c *gin.Context) {

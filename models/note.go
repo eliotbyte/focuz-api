@@ -39,13 +39,14 @@ type Attachment struct {
 }
 
 type NoteFilters struct {
-	IncludeTags []string `json:"includeTags"`
-	ExcludeTags []string `json:"excludeTags"`
-	NotReply    bool     `json:"notReply"`
-	Page        int      `json:"page"`
-	PageSize    int      `json:"pageSize"`
-	SearchQuery *string  `json:"searchQuery"`
-	ParentID    *int     `json:"parentId"`
-	SortField   string   `json:"sortField"`
-	SortOrder   string   `json:"sortOrder"`
+	Tags        []string   `json:"tags"`
+	NotReply    bool       `json:"notReply"`
+	Page        int        `json:"page"`
+	PageSize    int        `json:"pageSize"`
+	SearchQuery *string    `json:"searchQuery"`
+	ParentID    *int       `json:"parentId"`
+	SortField   string     `json:"sortField"`
+	SortOrder   string     `json:"sortOrder"`
+	DateFrom    *time.Time `json:"dateFrom"`
+	DateTo      *time.Time `json:"dateTo"`
 }

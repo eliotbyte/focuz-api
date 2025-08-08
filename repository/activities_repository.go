@@ -76,6 +76,7 @@ func (r *ActivitiesRepository) GetActivityByID(id int) (*models.Activity, error)
 		nid := int(dbNoteID.Int64)
 		a.NoteID = &nid
 	}
+	// Value is stored as JSONB; keep raw bytes so handlers can decode appropriately
 	a.Value = rawValue
 	return &a, nil
 }
@@ -183,7 +184,8 @@ FROM activities a
 	}
 	defer rows.Close()
 
-	var results []map[string]any
+	// Ensure non-nil slice so JSON encodes as [] instead of null
+	results := make([]map[string]any, 0)
 	for rows.Next() {
 		var periodStr string
 		var val float64

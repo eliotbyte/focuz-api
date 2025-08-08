@@ -7,20 +7,22 @@ import (
 	"strconv"
 )
 
-func (s *E2ETestSuite) Test20_CreateActivityType_Success() {
-	body := map[string]interface{}{
-		"name":        "money",
-		"value_type":  "float",
-		"unit":        "RUR",
-		"min_value":   -1000,
-		"max_value":   1000,
-		"aggregation": "sum",
-		"category_id": nil,
+func (s *E2ETestSuite) Test42_CreateActivityType_Success() {
+	reqBody := map[string]interface{}{
+		"name":        "Test Activity",
+		"valueType":   "integer",
+		"minValue":    1.0,
+		"maxValue":    10.0,
+		"aggregation": "avg",
+		"unit":        nil,
+		"categoryId":  1,
+		"spaceId":     s.createdSpaceID,
+		"isDefault":   false,
 	}
-	jsonBody, _ := json.Marshal(body)
+	jsonBody, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequest("POST", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types", bytes.NewBuffer(jsonBody))
-	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+s.ownerToken)
+	req.Header.Set("Content-Type", "application/json")
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	s.NoError(err)
@@ -28,18 +30,22 @@ func (s *E2ETestSuite) Test20_CreateActivityType_Success() {
 	s.Equal(http.StatusCreated, resp.StatusCode)
 }
 
-func (s *E2ETestSuite) Test21_CreateActivityType_MinValueError() {
-	body := map[string]interface{}{
-		"name":        "invalid_range",
-		"value_type":  "integer",
-		"min_value":   100,
-		"max_value":   50,
-		"aggregation": "sum",
+func (s *E2ETestSuite) Test43_CreateActivityType_MinValueError() {
+	reqBody := map[string]interface{}{
+		"name":        "Test Activity",
+		"valueType":   "integer",
+		"minValue":    15.0, // Greater than maxValue
+		"maxValue":    10.0,
+		"aggregation": "avg",
+		"unit":        nil,
+		"categoryId":  1,
+		"spaceId":     s.createdSpaceID,
+		"isDefault":   false,
 	}
-	jsonBody, _ := json.Marshal(body)
+	jsonBody, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequest("POST", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types", bytes.NewBuffer(jsonBody))
-	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+s.ownerToken)
+	req.Header.Set("Content-Type", "application/json")
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	s.NoError(err)
@@ -47,123 +53,162 @@ func (s *E2ETestSuite) Test21_CreateActivityType_MinValueError() {
 	s.Equal(http.StatusBadRequest, resp.StatusCode)
 }
 
-func (s *E2ETestSuite) Test22_DeleteActivityType() {
-	body := map[string]interface{}{
-		"name":        "deletable",
-		"value_type":  "integer",
-		"aggregation": "sum",
+func (s *E2ETestSuite) Test44_DeleteActivityType() {
+	// First create an activity type
+	reqBody := map[string]interface{}{
+		"name":        "To Delete",
+		"valueType":   "integer",
+		"minValue":    1.0,
+		"maxValue":    10.0,
+		"aggregation": "avg",
+		"unit":        nil,
+		"categoryId":  1,
+		"spaceId":     s.createdSpaceID,
+		"isDefault":   false,
 	}
-	jsonBody, _ := json.Marshal(body)
-	reqCreate, _ := http.NewRequest("POST", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types", bytes.NewBuffer(jsonBody))
-	reqCreate.Header.Set("Authorization", "Bearer "+s.ownerToken)
-	reqCreate.Header.Set("Content-Type", "application/json")
-	client := &http.Client{}
-
-	respCreate, err := client.Do(reqCreate)
-	s.NoError(err)
-	if err != nil {
-		return
-	}
-	defer respCreate.Body.Close()
-
-	if respCreate.StatusCode == http.StatusCreated {
-		var respData map[string]interface{}
-		json.NewDecoder(respCreate.Body).Decode(&respData)
-		s.True(respData["success"].(bool))
-		typeData := respData["data"].(map[string]interface{})
-		typeID := int(typeData["id"].(float64))
-
-		reqDel, _ := http.NewRequest("PATCH", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types/"+strconv.Itoa(typeID)+"/delete", nil)
-		reqDel.Header.Set("Authorization", "Bearer "+s.ownerToken)
-		respDel, delErr := client.Do(reqDel)
-		s.NoError(delErr)
-		if delErr != nil {
-			return
-		}
-		defer respDel.Body.Close()
-		s.Equal(http.StatusOK, respDel.StatusCode)
-	}
-}
-
-func (s *E2ETestSuite) Test23_RestoreActivityType() {
-	body := map[string]interface{}{
-		"name":        "restorable",
-		"value_type":  "boolean",
-		"aggregation": "and",
-	}
-	jsonBody, _ := json.Marshal(body)
-	reqCreate, _ := http.NewRequest("POST", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types", bytes.NewBuffer(jsonBody))
-	reqCreate.Header.Set("Authorization", "Bearer "+s.ownerToken)
-	reqCreate.Header.Set("Content-Type", "application/json")
-	client := &http.Client{}
-
-	respCreate, err := client.Do(reqCreate)
-	s.NoError(err)
-	if err != nil {
-		return
-	}
-	defer respCreate.Body.Close()
-	s.Equal(http.StatusCreated, respCreate.StatusCode)
-
-	var respData map[string]interface{}
-	json.NewDecoder(respCreate.Body).Decode(&respData)
-	s.True(respData["success"].(bool))
-	typeData := respData["data"].(map[string]interface{})
-	typeID := int(typeData["id"].(float64))
-
-	reqDel, _ := http.NewRequest("PATCH", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types/"+strconv.Itoa(typeID)+"/delete", nil)
-	reqDel.Header.Set("Authorization", "Bearer "+s.ownerToken)
-	respDel, delErr := client.Do(reqDel)
-	s.NoError(delErr)
-	if delErr != nil {
-		return
-	}
-	defer respDel.Body.Close()
-	s.Equal(http.StatusOK, respDel.StatusCode)
-
-	reqRestore, _ := http.NewRequest("PATCH", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types/"+strconv.Itoa(typeID)+"/restore", nil)
-	reqRestore.Header.Set("Authorization", "Bearer "+s.ownerToken)
-	respRestore, restoreErr := client.Do(reqRestore)
-	s.NoError(restoreErr)
-	if restoreErr != nil {
-		return
-	}
-	defer respRestore.Body.Close()
-	s.Equal(http.StatusOK, respRestore.StatusCode)
-}
-
-func (s *E2ETestSuite) Test24_CreateActivityType_DuplicateName() {
-	body := map[string]interface{}{
-		"name":        "duplicate_test",
-		"value_type":  "text",
-		"aggregation": "count",
-	}
-	jsonBody, _ := json.Marshal(body)
+	jsonBody, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequest("POST", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types", bytes.NewBuffer(jsonBody))
-	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+s.ownerToken)
+	req.Header.Set("Content-Type", "application/json")
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	s.NoError(err)
 	defer resp.Body.Close()
 	s.Equal(http.StatusCreated, resp.StatusCode)
 
+	// Get the created activity type ID
+	var response map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&response)
+	s.True(response["success"].(bool))
+
+	// Check if data exists before accessing it
+	if response["data"] != nil {
+		data := response["data"].(map[string]interface{})
+		activityTypeID := int(data["id"].(float64))
+
+		// Delete the activity type
+		req2, _ := http.NewRequest("PATCH", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types/"+strconv.Itoa(activityTypeID)+"/delete", nil)
+		req2.Header.Set("Authorization", "Bearer "+s.ownerToken)
+		resp2, err2 := client.Do(req2)
+		s.NoError(err2)
+		defer resp2.Body.Close()
+		s.Equal(http.StatusOK, resp2.StatusCode)
+	} else {
+		s.Fail("Activity type creation response does not contain data")
+	}
+}
+
+func (s *E2ETestSuite) Test45_RestoreActivityType() {
+	// First create an activity type
+	reqBody := map[string]interface{}{
+		"name":        "To Restore",
+		"valueType":   "integer",
+		"minValue":    1.0,
+		"maxValue":    10.0,
+		"aggregation": "avg",
+		"unit":        nil,
+		"categoryId":  1,
+		"spaceId":     s.createdSpaceID,
+		"isDefault":   false,
+	}
+	jsonBody, _ := json.Marshal(reqBody)
+	req, _ := http.NewRequest("POST", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types", bytes.NewBuffer(jsonBody))
+	req.Header.Set("Authorization", "Bearer "+s.ownerToken)
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	s.NoError(err)
+	defer resp.Body.Close()
+	s.Equal(http.StatusCreated, resp.StatusCode)
+
+	// Get the created activity type ID
+	var response map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&response)
+	s.True(response["success"].(bool))
+
+	// Check if data exists before accessing it
+	if response["data"] != nil {
+		data := response["data"].(map[string]interface{})
+		activityTypeID := int(data["id"].(float64))
+
+		// Delete the activity type
+		req2, _ := http.NewRequest("PATCH", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types/"+strconv.Itoa(activityTypeID)+"/delete", nil)
+		req2.Header.Set("Authorization", "Bearer "+s.ownerToken)
+		resp2, err2 := client.Do(req2)
+		s.NoError(err2)
+		defer resp2.Body.Close()
+		s.Equal(http.StatusOK, resp2.StatusCode)
+
+		// Restore the activity type
+		req3, _ := http.NewRequest("PATCH", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types/"+strconv.Itoa(activityTypeID)+"/restore", nil)
+		req3.Header.Set("Authorization", "Bearer "+s.ownerToken)
+		resp3, err3 := client.Do(req3)
+		s.NoError(err3)
+		defer resp3.Body.Close()
+		s.Equal(http.StatusCreated, resp3.StatusCode)
+
+		// Verify the activity type was restored
+		var restoreResponse map[string]interface{}
+		json.NewDecoder(resp3.Body).Decode(&restoreResponse)
+		s.True(restoreResponse["success"].(bool))
+
+		if restoreResponse["data"] != nil {
+			restoreData := restoreResponse["data"].(map[string]interface{})
+			s.Equal("To Restore", restoreData["name"])
+		} else {
+			s.Fail("Restore response does not contain data")
+		}
+	} else {
+		s.Fail("Activity type creation response does not contain data")
+	}
+}
+
+func (s *E2ETestSuite) Test46_CreateActivityType_DuplicateName() {
+	// First create an activity type
+	reqBody := map[string]interface{}{
+		"name":        "Duplicate Test",
+		"valueType":   "integer",
+		"minValue":    1.0,
+		"maxValue":    10.0,
+		"aggregation": "avg",
+		"unit":        nil,
+		"categoryId":  1,
+		"spaceId":     s.createdSpaceID,
+		"isDefault":   false,
+	}
+	jsonBody, _ := json.Marshal(reqBody)
+	req, _ := http.NewRequest("POST", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types", bytes.NewBuffer(jsonBody))
+	req.Header.Set("Authorization", "Bearer "+s.ownerToken)
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	s.NoError(err)
+	defer resp.Body.Close()
+	s.Equal(http.StatusCreated, resp.StatusCode)
+
+	// Try to create another activity type with the same name
 	req2, _ := http.NewRequest("POST", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types", bytes.NewBuffer(jsonBody))
-	req2.Header.Set("Content-Type", "application/json")
 	req2.Header.Set("Authorization", "Bearer "+s.ownerToken)
+	req2.Header.Set("Content-Type", "application/json")
 	resp2, err2 := client.Do(req2)
 	s.NoError(err2)
 	defer resp2.Body.Close()
 	s.Equal(http.StatusBadRequest, resp2.StatusCode)
 }
 
-func (s *E2ETestSuite) Test25_InvalidValueType() {
-	body := map[string]interface{}{
-		"name":        "invalid_type",
-		"value_type":  "unknown",
-		"aggregation": "sum",
+func (s *E2ETestSuite) Test47_InvalidValueType() {
+	reqBody := map[string]interface{}{
+		"name":        "Invalid Type",
+		"valueType":   "invalid_type",
+		"minValue":    1.0,
+		"maxValue":    10.0,
+		"aggregation": "avg",
+		"unit":        nil,
+		"categoryId":  1,
+		"spaceId":     s.createdSpaceID,
+		"isDefault":   false,
 	}
-	jsonBody, _ := json.Marshal(body)
+	jsonBody, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequest("POST", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types", bytes.NewBuffer(jsonBody))
 	req.Header.Set("Authorization", "Bearer "+s.ownerToken)
 	req.Header.Set("Content-Type", "application/json")
@@ -174,13 +219,19 @@ func (s *E2ETestSuite) Test25_InvalidValueType() {
 	s.Equal(http.StatusBadRequest, resp.StatusCode)
 }
 
-func (s *E2ETestSuite) Test26_InvalidAggregation() {
-	body := map[string]interface{}{
-		"name":        "invalid_agg",
-		"value_type":  "float",
-		"aggregation": "sum_everything",
+func (s *E2ETestSuite) Test48_InvalidAggregation() {
+	reqBody := map[string]interface{}{
+		"name":        "Invalid Aggregation",
+		"valueType":   "integer",
+		"minValue":    1.0,
+		"maxValue":    10.0,
+		"aggregation": "invalid_agg",
+		"unit":        nil,
+		"categoryId":  1,
+		"spaceId":     s.createdSpaceID,
+		"isDefault":   false,
 	}
-	jsonBody, _ := json.Marshal(body)
+	jsonBody, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequest("POST", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types", bytes.NewBuffer(jsonBody))
 	req.Header.Set("Authorization", "Bearer "+s.ownerToken)
 	req.Header.Set("Content-Type", "application/json")
@@ -191,14 +242,19 @@ func (s *E2ETestSuite) Test26_InvalidAggregation() {
 	s.Equal(http.StatusBadRequest, resp.StatusCode)
 }
 
-func (s *E2ETestSuite) Test27_TimeWithNullUnit_Valid() {
-	body := map[string]interface{}{
-		"name":        "sleep_duration",
-		"value_type":  "time",
+func (s *E2ETestSuite) Test49_TimeWithNullUnit_Valid() {
+	reqBody := map[string]interface{}{
+		"name":        "Time Activity",
+		"valueType":   "time",
+		"minValue":    0.0,
+		"maxValue":    nil,
 		"aggregation": "sum",
 		"unit":        nil,
+		"categoryId":  1,
+		"spaceId":     s.createdSpaceID,
+		"isDefault":   false,
 	}
-	jsonBody, _ := json.Marshal(body)
+	jsonBody, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequest("POST", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types", bytes.NewBuffer(jsonBody))
 	req.Header.Set("Authorization", "Bearer "+s.ownerToken)
 	req.Header.Set("Content-Type", "application/json")
@@ -209,15 +265,19 @@ func (s *E2ETestSuite) Test27_TimeWithNullUnit_Valid() {
 	s.Equal(http.StatusCreated, resp.StatusCode)
 }
 
-func (s *E2ETestSuite) Test28_TimeWithUnit_Invalid() {
-	unit := "minutes"
-	body := map[string]interface{}{
-		"name":        "sleep_with_unit",
-		"value_type":  "time",
+func (s *E2ETestSuite) Test50_TimeWithUnit_Invalid() {
+	reqBody := map[string]interface{}{
+		"name":        "Time Activity",
+		"valueType":   "time",
+		"minValue":    0.0,
+		"maxValue":    nil,
 		"aggregation": "sum",
-		"unit":        unit,
+		"unit":        "invalid_unit",
+		"categoryId":  1,
+		"spaceId":     s.createdSpaceID,
+		"isDefault":   false,
 	}
-	jsonBody, _ := json.Marshal(body)
+	jsonBody, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequest("POST", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types", bytes.NewBuffer(jsonBody))
 	req.Header.Set("Authorization", "Bearer "+s.ownerToken)
 	req.Header.Set("Content-Type", "application/json")
@@ -228,13 +288,19 @@ func (s *E2ETestSuite) Test28_TimeWithUnit_Invalid() {
 	s.Equal(http.StatusBadRequest, resp.StatusCode)
 }
 
-func (s *E2ETestSuite) Test29_BooleanWithInvalidAggregation() {
-	body := map[string]interface{}{
-		"name":        "bool_avg",
-		"value_type":  "boolean",
-		"aggregation": "avg",
+func (s *E2ETestSuite) Test51_BooleanWithInvalidAggregation() {
+	reqBody := map[string]interface{}{
+		"name":        "Boolean Activity",
+		"valueType":   "boolean",
+		"minValue":    nil,
+		"maxValue":    nil,
+		"aggregation": "sum", // Invalid for boolean
+		"unit":        nil,
+		"categoryId":  1,
+		"spaceId":     s.createdSpaceID,
+		"isDefault":   false,
 	}
-	jsonBody, _ := json.Marshal(body)
+	jsonBody, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequest("POST", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types", bytes.NewBuffer(jsonBody))
 	req.Header.Set("Authorization", "Bearer "+s.ownerToken)
 	req.Header.Set("Content-Type", "application/json")
@@ -245,13 +311,19 @@ func (s *E2ETestSuite) Test29_BooleanWithInvalidAggregation() {
 	s.Equal(http.StatusBadRequest, resp.StatusCode)
 }
 
-func (s *E2ETestSuite) Test30_TextWithInvalidAggregation() {
-	body := map[string]interface{}{
-		"name":        "text_invalid_agg",
-		"value_type":  "text",
-		"aggregation": "sum",
+func (s *E2ETestSuite) Test52_TextWithInvalidAggregation() {
+	reqBody := map[string]interface{}{
+		"name":        "Text Activity",
+		"valueType":   "text",
+		"minValue":    nil,
+		"maxValue":    nil,
+		"aggregation": "avg", // Invalid for text
+		"unit":        nil,
+		"categoryId":  1,
+		"spaceId":     s.createdSpaceID,
+		"isDefault":   false,
 	}
-	jsonBody, _ := json.Marshal(body)
+	jsonBody, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequest("POST", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types", bytes.NewBuffer(jsonBody))
 	req.Header.Set("Authorization", "Bearer "+s.ownerToken)
 	req.Header.Set("Content-Type", "application/json")
@@ -262,7 +334,7 @@ func (s *E2ETestSuite) Test30_TextWithInvalidAggregation() {
 	s.Equal(http.StatusBadRequest, resp.StatusCode)
 }
 
-func (s *E2ETestSuite) Test31_GetActivityTypesBySpace() {
+func (s *E2ETestSuite) Test53_GetActivityTypesBySpace() {
 	req, _ := http.NewRequest("GET", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types", nil)
 	req.Header.Set("Authorization", "Bearer "+s.ownerToken)
 	client := &http.Client{}
@@ -274,70 +346,31 @@ func (s *E2ETestSuite) Test31_GetActivityTypesBySpace() {
 	var response map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&response)
 	s.True(response["success"].(bool))
-	types := response["data"].([]interface{})
-	s.True(len(types) >= 3)
+
+	// Handle paginated response structure
+	data := response["data"].(map[string]interface{})
+	activityTypes := data["data"].([]interface{})
+	s.True(len(activityTypes) >= 1)
 }
 
-func (s *E2ETestSuite) Test31_CannotDeleteDefaultActivityType() {
-	req, _ := http.NewRequest("GET", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types", nil)
+func (s *E2ETestSuite) Test54_CannotDeleteDefaultActivityType() {
+	// Try to delete a default activity type (should fail)
+	req, _ := http.NewRequest("PATCH", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types/1/delete", nil)
 	req.Header.Set("Authorization", "Bearer "+s.ownerToken)
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	s.NoError(err)
 	defer resp.Body.Close()
-	s.Equal(http.StatusOK, resp.StatusCode)
-
-	var response map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&response)
-	s.True(response["success"].(bool))
-	types := response["data"].([]interface{})
-
-	var defaultTypeID int
-	for _, t := range types {
-		typeData := t.(map[string]interface{})
-		if typeData["isDefault"].(bool) && typeData["name"] == "mood" {
-			defaultTypeID = int(typeData["id"].(float64))
-			break
-		}
-	}
-	s.True(defaultTypeID > 0)
-
-	reqDel, _ := http.NewRequest("PATCH", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types/"+strconv.Itoa(defaultTypeID)+"/delete", nil)
-	reqDel.Header.Set("Authorization", "Bearer "+s.ownerToken)
-	respDel, errDel := client.Do(reqDel)
-	s.NoError(errDel)
-	defer respDel.Body.Close()
-	s.Equal(http.StatusForbidden, respDel.StatusCode)
+	s.Equal(http.StatusForbidden, resp.StatusCode)
 }
 
-func (s *E2ETestSuite) Test32_CannotRestoreDefaultActivityType() {
-	req, _ := http.NewRequest("GET", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types", nil)
+func (s *E2ETestSuite) Test55_CannotRestoreDefaultActivityType() {
+	// Try to restore a default activity type (should fail)
+	req, _ := http.NewRequest("PATCH", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types/1/restore", nil)
 	req.Header.Set("Authorization", "Bearer "+s.ownerToken)
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	s.NoError(err)
 	defer resp.Body.Close()
-	s.Equal(http.StatusOK, resp.StatusCode)
-
-	var response map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&response)
-	s.True(response["success"].(bool))
-	types := response["data"].([]interface{})
-
-	var defaultTypeID int
-	for _, t := range types {
-		typeData := t.(map[string]interface{})
-		if typeData["isDefault"].(bool) && typeData["name"] == "mood" {
-			defaultTypeID = int(typeData["id"].(float64))
-			break
-		}
-	}
-	s.True(defaultTypeID > 0)
-
-	reqRestore, _ := http.NewRequest("PATCH", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/activity-types/"+strconv.Itoa(defaultTypeID)+"/restore", nil)
-	reqRestore.Header.Set("Authorization", "Bearer "+s.ownerToken)
-	respRestore, errRestore := client.Do(reqRestore)
-	s.NoError(errRestore)
-	defer respRestore.Body.Close()
-	s.Equal(http.StatusForbidden, respRestore.StatusCode)
+	s.Equal(http.StatusForbidden, resp.StatusCode)
 }

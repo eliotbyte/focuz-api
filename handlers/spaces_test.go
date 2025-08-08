@@ -7,7 +7,7 @@ import (
 	"strconv"
 )
 
-func (s *E2ETestSuite) Test5_CreateSpace() {
+func (s *E2ETestSuite) Test08_CreateSpace() {
 	reqBody := `{"name":"Test Space"}`
 	req, _ := http.NewRequest("POST", s.baseURL+"/spaces", bytes.NewBuffer([]byte(reqBody)))
 	req.Header.Set("Authorization", "Bearer "+s.ownerToken)
@@ -30,8 +30,12 @@ func (s *E2ETestSuite) Test5_CreateSpace() {
 	}
 }
 
-func (s *E2ETestSuite) Test8_InviteGuest() {
-	reqBody := map[string]int{"userId": s.getGuestUserID()}
+func (s *E2ETestSuite) Test09_InviteGuest() {
+	// First ensure guest user is created and logged in
+	// This test should run after Test05_RegisterGuest and Test06_LoginGuest
+
+	// Invite guest user by username instead of userID
+	reqBody := map[string]string{"username": "guest"}
 	jsonBody, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequest("POST", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/invite", bytes.NewBuffer(jsonBody))
 	req.Header.Set("Authorization", "Bearer "+s.ownerToken)
@@ -40,10 +44,10 @@ func (s *E2ETestSuite) Test8_InviteGuest() {
 	resp, err := client.Do(req)
 	s.NoError(err)
 	defer resp.Body.Close()
-	s.Equal(http.StatusNoContent, resp.StatusCode)
+	s.Equal(http.StatusOK, resp.StatusCode)
 }
 
-func (s *E2ETestSuite) Test9_GuestCannotEditSpace() {
+func (s *E2ETestSuite) Test10_GuestCannotEditSpace() {
 	reqBody := `{"name":"New Name"}`
 	req, _ := http.NewRequest("PATCH", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID), bytes.NewBuffer([]byte(reqBody)))
 	req.Header.Set("Authorization", "Bearer "+s.guestToken)
@@ -55,7 +59,7 @@ func (s *E2ETestSuite) Test9_GuestCannotEditSpace() {
 	s.Equal(http.StatusForbidden, resp.StatusCode)
 }
 
-func (s *E2ETestSuite) Test10_GetAccessibleSpaces() {
+func (s *E2ETestSuite) Test11_GetAccessibleSpaces() {
 	req, _ := http.NewRequest("GET", s.baseURL+"/spaces", nil)
 	req.Header.Set("Authorization", "Bearer "+s.ownerToken)
 	client := &http.Client{}
@@ -67,7 +71,10 @@ func (s *E2ETestSuite) Test10_GetAccessibleSpaces() {
 	var response map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&response)
 	s.True(response["success"].(bool))
-	spaces := response["data"].([]interface{})
+
+	// Handle paginated response structure
+	data := response["data"].(map[string]interface{})
+	spaces := data["data"].([]interface{})
 	s.True(len(spaces) >= 1)
 
 	found := false
@@ -85,14 +92,14 @@ func (s *E2ETestSuite) Test10_GetAccessibleSpaces() {
 	s.True(found)
 }
 
-func (s *E2ETestSuite) Test11_CreateParticipantAndInvite() {
+func (s *E2ETestSuite) Test12_CreateParticipantAndInvite() {
 	body := `{"username":"participant","password":"partpass"}`
 	resp, err := http.Post(s.baseURL+"/register", "application/json", bytes.NewBuffer([]byte(body)))
 	s.NoError(err)
 	defer resp.Body.Close()
 	s.Equal(http.StatusCreated, resp.StatusCode)
 
-	reqBody := map[string]int{"userId": 3}
+	reqBody := map[string]string{"username": "participant"}
 	jsonBody, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequest("POST", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/invite", bytes.NewBuffer(jsonBody))
 	req.Header.Set("Authorization", "Bearer "+s.ownerToken)
@@ -101,10 +108,10 @@ func (s *E2ETestSuite) Test11_CreateParticipantAndInvite() {
 	resp2, err2 := client.Do(req)
 	s.NoError(err2)
 	defer resp2.Body.Close()
-	s.Equal(http.StatusNoContent, resp2.StatusCode)
+	s.Equal(http.StatusOK, resp2.StatusCode)
 }
 
-func (s *E2ETestSuite) Test12_RemoveUser_GuestCantRemove() {
+func (s *E2ETestSuite) Test13_RemoveUser_GuestCantRemove() {
 	req, _ := http.NewRequest(
 		"DELETE",
 		s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/users/3",
@@ -118,7 +125,7 @@ func (s *E2ETestSuite) Test12_RemoveUser_GuestCantRemove() {
 	s.Equal(http.StatusForbidden, resp.StatusCode)
 }
 
-func (s *E2ETestSuite) Test13_RemoveUser_ParticipantNotFound() {
+func (s *E2ETestSuite) Test14_RemoveUser_ParticipantNotFound() {
 	req, _ := http.NewRequest(
 		"DELETE",
 		s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/users/9999",
@@ -132,7 +139,7 @@ func (s *E2ETestSuite) Test13_RemoveUser_ParticipantNotFound() {
 	s.Equal(http.StatusNotFound, resp.StatusCode)
 }
 
-func (s *E2ETestSuite) Test14_RemoveUser_CannotRemoveOwner() {
+func (s *E2ETestSuite) Test15_RemoveUser_CannotRemoveOwner() {
 	req, _ := http.NewRequest(
 		"DELETE",
 		s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/users/1",
@@ -146,7 +153,7 @@ func (s *E2ETestSuite) Test14_RemoveUser_CannotRemoveOwner() {
 	s.Equal(http.StatusForbidden, resp.StatusCode)
 }
 
-func (s *E2ETestSuite) Test15_RemoveUser_Success() {
+func (s *E2ETestSuite) Test16_RemoveUser_Success() {
 	req, _ := http.NewRequest(
 		"DELETE",
 		s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/users/3",
@@ -157,10 +164,10 @@ func (s *E2ETestSuite) Test15_RemoveUser_Success() {
 	resp, err := client.Do(req)
 	s.NoError(err)
 	defer resp.Body.Close()
-	s.Equal(http.StatusNoContent, resp.StatusCode)
+	s.Equal(http.StatusOK, resp.StatusCode)
 }
 
-func (s *E2ETestSuite) Test16_GetUsersInSpace_Success() {
+func (s *E2ETestSuite) Test17_GetUsersInSpace_Success() {
 	req, _ := http.NewRequest("GET", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/users", nil)
 	req.Header.Set("Authorization", "Bearer "+s.ownerToken)
 	client := &http.Client{}
@@ -172,47 +179,31 @@ func (s *E2ETestSuite) Test16_GetUsersInSpace_Success() {
 	var response map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&response)
 	s.True(response["success"].(bool))
-	participants := response["data"].([]interface{})
-	s.True(len(participants) >= 1)
 
-	foundOwner := false
-	for _, p := range participants {
-		participant := p.(map[string]interface{})
-		if int(participant["id"].(float64)) == 1 {
-			foundOwner = true
+	// Handle paginated response structure
+	data := response["data"].(map[string]interface{})
+	users := data["data"].([]interface{})
+	s.True(len(users) >= 1)
+
+	found := false
+	for _, u := range users {
+		user := u.(map[string]interface{})
+		if int(user["id"].(float64)) == 1 { // owner
+			found = true
+			s.Contains(user, "username")
+			s.Contains(user, "roleId")
 			break
 		}
 	}
-	s.True(foundOwner)
+	s.True(found)
 }
 
-func (s *E2ETestSuite) Test17_GetUsersInSpace_ForbiddenForNonMember() {
-	body := `{"username":"outsider","password":"outsiderpass"}`
-	resp, err := http.Post(s.baseURL+"/register", "application/json", bytes.NewBuffer([]byte(body)))
+func (s *E2ETestSuite) Test18_GetUsersInSpace_ForbiddenForNonMember() {
+	req, _ := http.NewRequest("GET", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/users", nil)
+	req.Header.Set("Authorization", "Bearer "+s.guestToken)
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	s.NoError(err)
 	defer resp.Body.Close()
-	s.Equal(http.StatusCreated, resp.StatusCode)
-
-	loginBody := `{"username":"outsider","password":"outsiderpass"}`
-	loginReq, _ := http.NewRequest("POST", s.baseURL+"/login", bytes.NewBuffer([]byte(loginBody)))
-	loginReq.Header.Set("Content-Type", "application/json")
-	client := &http.Client{}
-	loginResp, loginErr := client.Do(loginReq)
-	s.NoError(loginErr)
-	defer loginResp.Body.Close()
-	s.Equal(http.StatusOK, loginResp.StatusCode)
-
-	var data map[string]interface{}
-	json.NewDecoder(loginResp.Body).Decode(&data)
-	s.True(data["success"].(bool))
-	tokenData := data["data"].(map[string]interface{})
-	outsiderToken := tokenData["token"].(string)
-	s.NotEmpty(outsiderToken)
-
-	req, _ := http.NewRequest("GET", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/users", nil)
-	req.Header.Set("Authorization", "Bearer "+outsiderToken)
-	resp2, err2 := client.Do(req)
-	s.NoError(err2)
-	defer resp2.Body.Close()
-	s.Equal(http.StatusForbidden, resp2.StatusCode)
+	s.Equal(http.StatusForbidden, resp.StatusCode)
 }

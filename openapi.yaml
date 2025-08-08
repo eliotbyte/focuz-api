@@ -424,10 +424,47 @@ paths:
           in: query
           schema:
             type: string
-        - name: tags
+        - name: dateFrom
           in: query
           schema:
             type: string
+            format: date
+          description: Filter notes from this date (YYYY-MM-DD)
+          example: '2024-01-01'
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Filter notes until this date (YYYY-MM-DD)
+          example: '2024-12-31'
+        - name: tags
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+          description: Array of tags. Use '!' prefix to exclude tags (e.g. '!archived')
+          example: ['important', '!archived']
+        - name: sort
+          in: query
+          schema:
+            type: string
+          description: Sort field and order (format: field,order). Fields: createdat, modifiedat. Orders: ASC, DESC
+          example: 'createdat,DESC'
+        - name: notReply
+          in: query
+          schema:
+            type: boolean
+          description: Show only notes that are not replies
+          example: true
+        - name: parentId
+          in: query
+          schema:
+            type: integer
+          description: Show only replies to this note ID
         - name: page
           in: query
           schema:
