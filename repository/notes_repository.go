@@ -2,6 +2,7 @@ package repository
 
 import (
 	"database/sql"
+	"encoding/json"
 	"focuz-api/initializers"
 	"focuz-api/models"
 	"strconv"
@@ -302,10 +303,34 @@ func (r *NotesRepository) GetNotes(userID, spaceID int, topicID *int, filters mo
 	}
 
 	query := `
-		SELECT n.id, n.user_id, n.text, n.created_at, n.modified_at, n.date, 
-		       n.parent_id, n.reply_count, n.is_deleted, n.topic_id
+		SELECT 
+		  n.id, n.user_id, n.text, n.created_at, n.modified_at, n.date,
+		  n.parent_id, p.text AS parent_text, n.reply_count, n.is_deleted, n.topic_id,
+		  COALESCE((SELECT ARRAY_AGG(DISTINCT t2.name)
+		           FROM tag t2 JOIN note_to_tag nt2 ON nt2.tag_id = t2.id
+		           WHERE nt2.note_id = n.id), ARRAY[]::text[]) AS tags,
+		  COALESCE((
+		    SELECT json_agg(json_build_object(
+		      'id', a.id,
+		      'typeId', a.type_id,
+		      'value', a.value->>'data',
+		      'unit', at.unit
+		    ) ORDER BY a.id)
+		    FROM activities a JOIN activity_types at ON a.type_id = at.id
+		    WHERE a.note_id = n.id AND a.is_deleted = FALSE
+		  ), '[]'::json) AS activities,
+		  COALESCE((
+		    SELECT json_agg(json_build_object(
+		      'id', att.id,
+		      'fileName', att.file_name,
+		      'fileType', att.file_type,
+		      'fileSize', att.file_size
+		    ) ORDER BY att.id)
+		    FROM attachments att WHERE att.note_id = n.id
+		  ), '[]'::json) AS attachments
 		FROM note n
 		INNER JOIN topic t ON n.topic_id = t.id
+		LEFT JOIN note p ON n.parent_id = p.id
 	`
 
 	// Process tags with include/exclude logic safely (parameterized)
@@ -348,15 +373,21 @@ func (r *NotesRepository) GetNotes(userID, spaceID int, topicID *int, filters mo
 	query += " ORDER BY " + sortField + " " + filters.SortOrder
 	query += " LIMIT $" + strconv.Itoa(idx) + " OFFSET $" + strconv.Itoa(idx+1)
 	params = append(params, filters.PageSize, offset)
+
 	rows, err := r.db.Query(query, params...)
 	if err != nil {
 		return nil, 0, err
 	}
 	defer rows.Close()
+
 	var notes []*models.Note
 	for rows.Next() {
 		var note models.Note
 		var parentID sql.NullInt64
+		var parentText sql.NullString
+		var tags pq.StringArray
+		var activitiesJSON []byte
+		var attachmentsJSON []byte
 		err := rows.Scan(
 			&note.ID,
 			&note.UserID,
@@ -365,71 +396,48 @@ func (r *NotesRepository) GetNotes(userID, spaceID int, topicID *int, filters mo
 			&note.ModifiedAt,
 			&note.Date,
 			&parentID,
+			&parentText,
 			&note.ReplyCount,
 			&note.IsDeleted,
 			&note.TopicID,
+			&tags,
+			&activitiesJSON,
+			&attachmentsJSON,
 		)
 		if err != nil {
 			return nil, 0, err
 		}
 		if parentID.Valid {
-			parent, _ := r.GetNoteByID(int(parentID.Int64))
-			if parent != nil {
-				note.Parent = &models.ParentNote{
-					ID:   parent.ID,
-					Text: truncate(parent.Text, 20),
+			note.Parent = &models.ParentNote{ID: int(parentID.Int64), Text: truncate(parentText.String, 20)}
+		}
+		note.Tags = append([]string{}, tags...)
+
+		// Unmarshal activities
+		if len(activitiesJSON) > 0 {
+			var acts []models.NoteActivity
+			if err := json.Unmarshal(activitiesJSON, &acts); err != nil {
+				return nil, 0, err
+			}
+			note.Activities = acts
+		}
+		// Unmarshal attachments and add URLs
+		if len(attachmentsJSON) > 0 {
+			var atts []models.Attachment
+			if err := json.Unmarshal(attachmentsJSON, &atts); err != nil {
+				return nil, 0, err
+			}
+			for i := range atts {
+				url, uerr := initializers.GenerateAttachmentURL(atts[i].ID, atts[i].FileName)
+				if uerr != nil {
+					return nil, 0, uerr
 				}
+				atts[i].URL = url
 			}
+			note.Attachments = atts
 		}
-		tRows, err := r.db.Query(`
-			SELECT t.name FROM tag t
-			JOIN note_to_tag nt ON t.id = nt.tag_id
-			WHERE nt.note_id = $1
-		`, note.ID)
-		if err != nil {
-			return nil, 0, err
-		}
-		for tRows.Next() {
-			var tg string
-			if err := tRows.Scan(&tg); err != nil {
-				tRows.Close()
-				return nil, 0, err
-			}
-			note.Tags = append(note.Tags, tg)
-		}
-		tRows.Close()
-		activities, err := r.getActivitiesForNote(note.ID)
-		if err != nil {
-			return nil, 0, err
-		}
-		note.Activities = activities
-		aRows, err := r.db.Query(`
-			SELECT id, file_name, file_type, file_size
-			FROM attachments
-			WHERE note_id = $1
-		`, note.ID)
-		if err != nil {
-			return nil, 0, err
-		}
-		var attachments []models.Attachment
-		for aRows.Next() {
-			var att models.Attachment
-			if err := aRows.Scan(&att.ID, &att.FileName, &att.FileType, &att.FileSize); err != nil {
-				aRows.Close()
-				return nil, 0, err
-			}
-			url, err := initializers.GenerateAttachmentURL(att.ID, att.FileName)
-			if err != nil {
-				aRows.Close()
-				return nil, 0, err
-			}
-			att.URL = url
-			attachments = append(attachments, att)
-		}
-		aRows.Close()
-		note.Attachments = attachments
 		notes = append(notes, &note)
 	}
+
 	var total int
 	countQuery := `
 		SELECT COUNT(n.id)
