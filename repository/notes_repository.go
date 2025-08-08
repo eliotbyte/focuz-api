@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lib/pq"
+
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -306,30 +308,37 @@ func (r *NotesRepository) GetNotes(userID, spaceID int, topicID *int, filters mo
 		INNER JOIN topic t ON n.topic_id = t.id
 	`
 
-	// Process tags with include/exclude logic
+	// Process tags with include/exclude logic safely (parameterized)
 	var includeTags []string
 	var excludeTags []string
 	for _, tag := range filters.Tags {
 		if strings.HasPrefix(tag, "!") {
 			excludeTags = append(excludeTags, strings.TrimPrefix(tag, "!"))
-		} else {
+		} else if tag != "" {
 			includeTags = append(includeTags, tag)
 		}
 	}
 
+	// Include: note must contain ALL includeTags
 	if len(includeTags) > 0 {
-		for _, tagVal := range includeTags {
-			query += " INNER JOIN note_to_tag nt_" + tagVal + " ON nt_" + tagVal + ".note_id = n.id " +
-				" INNER JOIN tag tg_" + tagVal + " ON tg_" + tagVal + ".id = nt_" + tagVal + ".tag_id AND tg_" + tagVal + ".name = '" + tagVal + "' "
-		}
+		// Count distinct matched tags for this note and compare with number of includeTags
+		conditions = append(conditions,
+			"(SELECT COUNT(DISTINCT t.name) FROM tag t JOIN note_to_tag nt ON nt.tag_id = t.id WHERE nt.note_id = n.id AND t.name = ANY($"+strconv.Itoa(idx)+")) = $"+strconv.Itoa(idx+1),
+		)
+		params = append(params, pq.Array(includeTags), len(includeTags))
+		idx += 2
 	}
+	// Exclude: note must NOT have any of excludeTags
+	if len(excludeTags) > 0 {
+		conditions = append(conditions,
+			"NOT EXISTS (SELECT 1 FROM tag xt JOIN note_to_tag xnt ON xnt.tag_id = xt.id WHERE xnt.note_id = n.id AND xt.name = ANY($"+strconv.Itoa(idx)+"))",
+		)
+		params = append(params, pq.Array(excludeTags))
+		idx++
+	}
+
 	if len(conditions) > 0 {
 		query += " WHERE " + joinConditions(conditions, " AND ")
-	}
-	if len(excludeTags) > 0 {
-		for _, exTag := range excludeTags {
-			query += " AND NOT EXISTS (SELECT 1 FROM note_to_tag xnt INNER JOIN tag xt ON xt.id = xnt.tag_id WHERE xnt.note_id = n.id AND xt.name = '" + exTag + "')"
-		}
 	}
 
 	sortField := "n.created_at"
@@ -427,20 +436,10 @@ func (r *NotesRepository) GetNotes(userID, spaceID int, topicID *int, filters mo
 		FROM note n
 		INNER JOIN topic t ON n.topic_id = t.id
 	`
-	if len(includeTags) > 0 {
-		for _, tagVal := range includeTags {
-			countQuery += " INNER JOIN note_to_tag nt_" + tagVal + " ON nt_" + tagVal + ".note_id = n.id " +
-				" INNER JOIN tag tg_" + tagVal + " ON tg_" + tagVal + ".id = nt_" + tagVal + ".tag_id AND tg_" + tagVal + ".name = '" + tagVal + "' "
-		}
-	}
 	if len(conditions) > 0 {
 		countQuery += " WHERE " + joinConditions(conditions, " AND ")
 	}
-	if len(excludeTags) > 0 {
-		for _, exTag := range excludeTags {
-			countQuery += " AND NOT EXISTS (SELECT 1 FROM note_to_tag xnt INNER JOIN tag xt ON xt.id = xnt.tag_id WHERE xnt.note_id = n.id AND xt.name = '" + exTag + "')"
-		}
-	}
+	// Reuse the same params without limit/offset for count
 	err = r.db.QueryRow(countQuery, params[:len(params)-2]...).Scan(&total)
 	if err != nil {
 		return nil, 0, err
