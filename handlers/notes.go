@@ -11,7 +11,8 @@ import (
 
 	"focuz-api/models"
 
-	"fmt"
+	"log/slog"
+	"os"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -66,8 +67,12 @@ func AuthMiddleware(secret string) gin.HandlerFunc {
 			return
 		}
 
-		// Debug logging
-		fmt.Printf("AuthMiddleware: userID=%d, path=%s\n", int(userID), c.Request.URL.Path)
+		// Structured logging with PII guard: do not log userId in production
+		if strings.ToLower(os.Getenv("APP_ENV")) != "production" {
+			slog.Info("auth request", "path", c.Request.URL.Path, "userId", int(userID))
+		} else {
+			slog.Info("auth request", "path", c.Request.URL.Path)
+		}
 
 		c.Set("userId", int(userID))
 		c.Next()
