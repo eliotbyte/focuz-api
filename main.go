@@ -25,8 +25,8 @@ func main() {
 	}
 
 	jwtSecret := os.Getenv("JWT_SECRET")
-	if jwtSecret == "" {
-		jwtSecret = "mysecretkey"
+	if len(jwtSecret) < 32 {
+		log.Fatal("JWT_SECRET must be set and at least 32 characters")
 	}
 
 	var db *sql.DB
