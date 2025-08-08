@@ -137,3 +137,14 @@ CREATE TABLE chart (
 
 -- Insert dashboard topic type
 INSERT INTO topic_type (name) VALUES ('dashboard') ON CONFLICT (name) DO NOTHING;
+
+-- Performance indexes
+CREATE INDEX IF NOT EXISTS idx_note_topic_id ON note(topic_id);
+CREATE INDEX IF NOT EXISTS idx_note_date ON note(date);
+CREATE INDEX IF NOT EXISTS idx_note_created_at ON note(created_at);
+CREATE INDEX IF NOT EXISTS idx_topic_space_id ON topic(space_id);
+CREATE INDEX IF NOT EXISTS idx_user_to_space_user_space ON user_to_space(user_id, space_id);
+CREATE INDEX IF NOT EXISTS idx_attachments_note_id ON attachments(note_id);
+CREATE INDEX IF NOT EXISTS idx_activities_note_id ON activities(note_id);
+CREATE INDEX IF NOT EXISTS idx_activities_type_id ON activities(type_id);
+CREATE INDEX IF NOT EXISTS idx_activity_types_space_id ON activity_types(space_id);
