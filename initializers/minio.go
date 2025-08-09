@@ -27,6 +27,7 @@ type MinioConfig struct {
 }
 
 var MinioClient *minio.Client
+var ExternalMinioClient *minio.Client
 var Conf MinioConfig
 
 func InitMinio() error {
@@ -59,6 +60,28 @@ func InitMinio() error {
 			return errCreate
 		}
 	}
+
+	// Initialize external client once and reuse
+	extEndpoint := Conf.ExternalEndpoint
+	if strings.HasPrefix(extEndpoint, "http://") {
+		extEndpoint = strings.TrimPrefix(extEndpoint, "http://")
+	} else if strings.HasPrefix(extEndpoint, "https://") {
+		extEndpoint = strings.TrimPrefix(extEndpoint, "https://")
+	}
+	if extEndpoint == "" || extEndpoint == Conf.Endpoint {
+		ExternalMinioClient = MinioClient
+	} else {
+		external, err := minio.New(extEndpoint, &minio.Options{
+			Creds:  credentials.NewStaticV4(Conf.AccessKey, Conf.SecretKey, ""),
+			Secure: Conf.UseSSL,
+			Region: "us-east-1",
+		})
+		if err != nil {
+			return err
+		}
+		ExternalMinioClient = external
+	}
+
 	log.Println("Minio bucket ready:", Conf.Bucket)
 	return nil
 }
@@ -126,21 +149,12 @@ func GenerateAttachmentURL(id, fileName string) (string, error) {
 	reqParams := make(url.Values)
 	reqParams.Set("response-content-disposition", fmt.Sprintf("inline; filename=\"%s\"", sanitizeFilename(fileName)))
 	expiry := Conf.Expiry
-	endpoint := Conf.ExternalEndpoint
-	if strings.HasPrefix(endpoint, "http://") {
-		endpoint = strings.TrimPrefix(endpoint, "http://")
-	} else if strings.HasPrefix(endpoint, "https://") {
-		endpoint = strings.TrimPrefix(endpoint, "https://")
+
+	client := ExternalMinioClient
+	if client == nil {
+		client = MinioClient
 	}
-	externalClient, err := minio.New(endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(Conf.AccessKey, Conf.SecretKey, ""),
-		Secure: Conf.UseSSL,
-		Region: "us-east-1",
-	})
-	if err != nil {
-		return "", fmt.Errorf("failed to create external minio client: %v", err)
-	}
-	presignedURL, err := externalClient.PresignedGetObject(context.Background(), Conf.Bucket, id, expiry, reqParams)
+	presignedURL, err := client.PresignedGetObject(context.Background(), Conf.Bucket, id, expiry, reqParams)
 	if err != nil {
 		return "", fmt.Errorf("failed to create presigned url: %v", err)
 	}
