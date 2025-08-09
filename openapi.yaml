@@ -90,7 +90,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/APIResponse'
+                $ref: '#/components/schemas/PaginatedResponse'
     post:
       summary: Create a workspace
       tags:
@@ -213,7 +213,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/APIResponse'
+                $ref: '#/components/schemas/PaginatedResponse'
 
   /spaces/{spaceId}/invite:
     post:
@@ -391,7 +391,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/APIResponse'
+                $ref: '#/components/schemas/PaginatedResponse'
 
   /topic-types:
     get:
@@ -485,7 +485,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/APIResponse'
+                $ref: '#/components/schemas/PaginatedResponse'
     post:
       summary: Create a note
       tags:
@@ -755,7 +755,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/APIResponse'
+                $ref: '#/components/schemas/PaginatedResponse'
     post:
       summary: Create an activity type
       tags:
@@ -871,7 +871,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/APIResponse'
+                $ref: '#/components/schemas/PaginatedResponse'
     post:
       summary: Create a chart
       tags:
@@ -1004,12 +1004,12 @@ paths:
           multipart/form-data:
             schema:
               type: object
-              properties:
-                file:
-                  type: string
-                  format: binary
-                noteId:
-                  type: integer
+                             properties:
+                 file:
+                   type: string
+                   format: binary
+                 note_id:
+                   type: integer
       responses:
         '201':
           description: File uploaded
