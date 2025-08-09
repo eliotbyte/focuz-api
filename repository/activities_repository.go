@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 type ActivitiesRepository struct {
@@ -158,10 +160,33 @@ func (r *ActivitiesRepository) GetActivitiesAnalysis(
 		params = append(params, *endDate)
 		idx++
 	}
+
+	// Secure tag filtering: include must contain ALL tags, exclude must contain NONE
+	var includeTags []string
+	var excludeTags []string
 	for _, tag := range tags {
-		tagAlias := "tg_" + strings.ReplaceAll(tag, " ", "_")
-		joins = append(joins, "JOIN note_to_tag nt_"+tagAlias+" ON nt_"+tagAlias+".note_id = n.id "+
-			"JOIN tag "+tagAlias+" ON "+tagAlias+".id = nt_"+tagAlias+".tag_id AND "+tagAlias+".name = '"+tag+"'")
+		if tag == "" {
+			continue
+		}
+		if strings.HasPrefix(tag, "!") {
+			excludeTags = append(excludeTags, strings.TrimPrefix(tag, "!"))
+		} else {
+			includeTags = append(includeTags, tag)
+		}
+	}
+	if len(includeTags) > 0 {
+		conds = append(conds,
+			"(SELECT COUNT(DISTINCT tgn.name) FROM tag tgn JOIN note_to_tag ntn ON ntn.tag_id = tgn.id WHERE ntn.note_id = n.id AND tgn.name = ANY($"+strconv.Itoa(idx)+")) = $"+strconv.Itoa(idx+1),
+		)
+		params = append(params, pq.Array(includeTags), len(includeTags))
+		idx += 2
+	}
+	if len(excludeTags) > 0 {
+		conds = append(conds,
+			"NOT EXISTS (SELECT 1 FROM tag xt JOIN note_to_tag xnt ON xnt.tag_id = xt.id WHERE xnt.note_id = n.id AND xt.name = ANY($"+strconv.Itoa(idx)+"))",
+		)
+		params = append(params, pq.Array(excludeTags))
+		idx++
 	}
 
 	sqlStr := `
