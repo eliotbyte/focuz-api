@@ -48,6 +48,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/APIResponse'
+        '429':
+          description: Too many requests (rate limited)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
 
   /login:
     post:
@@ -69,6 +75,12 @@ paths:
                 $ref: '#/components/schemas/LoginResponse'
         '401':
           description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+        '429':
+          description: Too many requests (rate limited)
           content:
             application/json:
               schema:
@@ -103,6 +115,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedResponse'
+        '429':
+          description: Too many requests (rate limited)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
     post:
       summary: Create a workspace
       tags:
@@ -118,6 +136,12 @@ paths:
       responses:
         '201':
           description: Workspace created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+        '429':
+          description: Too many requests (rate limited)
           content:
             application/json:
               schema:

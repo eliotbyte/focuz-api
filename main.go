@@ -113,6 +113,8 @@ func main() {
 	}
 
 	r.Use(middleware.CORSMiddleware())
+	// Apply rate limiting globally after CORS but before routes
+	r.Use(middleware.RateLimitMiddleware())
 
 	// Public endpoints
 	r.GET("/health", handlers.HealthCheck)
