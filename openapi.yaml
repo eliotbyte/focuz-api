@@ -1116,8 +1116,9 @@ components:
           example: "john_doe"
         password:
           type: string
-          minLength: 6
-          example: "password123"
+          minLength: 8
+          description: "Password must be at least 8 characters"
+          example: "password1234"
 
     LoginRequest:
       type: object

@@ -94,6 +94,11 @@ func (h *NotesHandler) Register(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, "Username must be between 3 and 50 characters"))
 		return
 	}
+	// Enforce basic password policy: minimum length 8 characters
+	if len(req.Password) < 8 {
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, "Password must be at least 8 characters"))
+		return
+	}
 	user, err := h.repo.CreateUser(req.Username, req.Password)
 	if err != nil {
 		// Map unique violation to 409 Conflict for duplicate usernames
@@ -301,6 +306,11 @@ func (h *NotesHandler) GetNote(c *gin.Context) {
 		c.JSON(http.StatusForbidden, types.NewErrorResponse(types.ErrorCodeForbidden, "No access to the space"))
 		return
 	}
+	if roleID != globals.DefaultOwnerRoleID && note.UserID != userID {
+		c.JSON(http.StatusForbidden, types.NewErrorResponse(types.ErrorCodeForbidden, "No access to the note"))
+		return
+	}
+
 	c.JSON(http.StatusOK, types.NewSuccessResponse(note))
 }
 
