@@ -114,6 +114,9 @@ func main() {
 
 	r.Use(middleware.CORSMiddleware())
 
+	// Public endpoints
+	r.GET("/health", handlers.HealthCheck)
+
 	r.POST("/register", notesHandler.Register)
 	r.POST("/login", func(c *gin.Context) {
 		c.Set("jwtSecret", jwtSecret)

@@ -12,6 +12,18 @@ servers:
     description: Production server
 
 paths:
+  /health:
+    get:
+      summary: Health check
+      tags:
+        - System
+      responses:
+        '200':
+          description: Service health
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
   /register:
     post:
       summary: User registration
@@ -1102,6 +1114,24 @@ components:
         details:
           type: object
           additionalProperties: true
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        timestamp:
+          type: string
+          format: date-time
+          example: '2025-01-01T12:00:00Z'
+        version:
+          type: string
+          example: '1.0.0'
+      required:
+        - status
+        - timestamp
+        - version
 
     RegisterRequest:
       type: object
