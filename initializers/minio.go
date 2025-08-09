@@ -96,13 +96,22 @@ func parseExpiry(val string) time.Duration {
 	return time.Duration(v) * time.Second
 }
 
+func baseMIME(mime string) string {
+	if mime == "" {
+		return ""
+	}
+	parts := strings.Split(mime, ";")
+	return strings.TrimSpace(parts[0])
+}
+
 func CheckFileAllowed(size int64, mime string) error {
 	if size > Conf.MaxSize {
 		return fmt.Errorf("file size exceeds the limit")
 	}
+	incoming := baseMIME(mime)
 	allowed := false
 	for _, t := range Conf.FileTypes {
-		if t == mime {
+		if baseMIME(t) == incoming {
 			allowed = true
 			break
 		}
