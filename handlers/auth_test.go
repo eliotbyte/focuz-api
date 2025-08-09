@@ -19,7 +19,7 @@ func (s *E2ETestSuite) Test02_RegisterOwnerConflict() {
 	resp, err := http.Post(s.baseURL+"/register", "application/json", bytes.NewBuffer([]byte(body)))
 	s.NoError(err)
 	defer resp.Body.Close()
-	s.Equal(http.StatusInternalServerError, resp.StatusCode)
+	s.Equal(http.StatusConflict, resp.StatusCode)
 }
 
 func (s *E2ETestSuite) Test03_LoginOwnerInvalid() {

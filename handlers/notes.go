@@ -17,6 +17,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
+
+	"github.com/lib/pq"
 )
 
 type NotesHandler struct {
@@ -94,6 +96,11 @@ func (h *NotesHandler) Register(c *gin.Context) {
 	}
 	user, err := h.repo.CreateUser(req.Username, req.Password)
 	if err != nil {
+		// Map unique violation to 409 Conflict for duplicate usernames
+		if pgErr, ok := err.(*pq.Error); ok && string(pgErr.Code) == "23505" {
+			c.JSON(http.StatusConflict, types.NewErrorResponse(types.ErrorCodeConflict, "Username already exists"))
+			return
+		}
 		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, "Failed to register user: "+err.Error()))
 		return
 	}
