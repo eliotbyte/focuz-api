@@ -47,8 +47,8 @@ func (r *SpacesRepository) CreateSpace(name string, ownerID int) (*models.Space,
 
 	// Add the owner to the space with the correct role_id
 	_, err = tx.Exec(`
-		INSERT INTO user_to_space (user_id, space_id, role_id)
-		VALUES ($1, $2, $3)
+		INSERT INTO user_to_space (user_id, space_id, role_id, is_pending)
+		VALUES ($1, $2, $3, FALSE)
 		ON CONFLICT (user_id, space_id) DO UPDATE SET role_id = EXCLUDED.role_id
 	`, ownerID, spaceID, ownerRoleID)
 	if err != nil {
@@ -84,7 +84,7 @@ func (r *SpacesRepository) GetUserRoleIDInSpace(userID, spaceID int) (int, error
 	err := r.db.QueryRow(`
 		SELECT role_id
 		FROM user_to_space
-		WHERE user_id = $1 AND space_id = $2
+		WHERE user_id = $1 AND space_id = $2 AND is_pending = FALSE
 	`, userID, spaceID).Scan(&roleID)
 
 	if err != nil {
@@ -103,6 +103,7 @@ func (r *SpacesRepository) GetSpacesForUser(userID int) ([]models.Space, error) 
 		FROM space s
 		INNER JOIN user_to_space uts ON s.id = uts.space_id
 		WHERE uts.user_id = $1
+		  AND uts.is_pending = FALSE
 		  AND s.is_deleted = FALSE
 		ORDER BY s.id
 	`, userID)
@@ -138,6 +139,7 @@ func (r *SpacesRepository) GetSpacesForUserPaginated(userID, offset, limit int) 
 		FROM space s
 		INNER JOIN user_to_space uts ON s.id = uts.space_id
 		WHERE uts.user_id = $1
+		  AND uts.is_pending = FALSE
 		  AND s.is_deleted = FALSE
 	`, userID).Scan(&total)
 	if err != nil {
@@ -150,6 +152,7 @@ func (r *SpacesRepository) GetSpacesForUserPaginated(userID, offset, limit int) 
 		FROM space s
 		INNER JOIN user_to_space uts ON s.id = uts.space_id
 		WHERE uts.user_id = $1
+		  AND uts.is_pending = FALSE
 		  AND s.is_deleted = FALSE
 		ORDER BY s.id
 		LIMIT $2 OFFSET $3
@@ -180,10 +183,25 @@ func (r *SpacesRepository) GetSpacesForUserPaginated(userID, offset, limit int) 
 
 func (r *SpacesRepository) InviteUserToSpace(userID, spaceID, roleID int) error {
 	_, err := r.db.Exec(`
-		INSERT INTO user_to_space (user_id, space_id, role_id)
-		VALUES ($1, $2, $3)
-		ON CONFLICT (user_id, space_id) DO UPDATE SET role_id = EXCLUDED.role_id
+		INSERT INTO user_to_space (user_id, space_id, role_id, is_pending)
+		VALUES ($1, $2, $3, TRUE)
+		ON CONFLICT (user_id, space_id) DO UPDATE SET role_id = EXCLUDED.role_id, is_pending = TRUE
 	`, userID, spaceID, roleID)
+	return err
+}
+
+func (r *SpacesRepository) AcceptInvitation(userID, spaceID int) error {
+	_, err := r.db.Exec(`
+		UPDATE user_to_space SET is_pending = FALSE
+		WHERE user_id = $1 AND space_id = $2 AND is_pending = TRUE
+	`, userID, spaceID)
+	return err
+}
+
+func (r *SpacesRepository) DeclineInvitation(userID, spaceID int) error {
+	_, err := r.db.Exec(`
+		DELETE FROM user_to_space WHERE user_id = $1 AND space_id = $2 AND is_pending = TRUE
+	`, userID, spaceID)
 	return err
 }
 
@@ -200,7 +218,7 @@ func (r *SpacesRepository) GetUsersInSpace(spaceID int) ([]SpaceParticipant, err
 		SELECT u.id, u.username, u.created_at, uts.role_id
 		FROM users u
 		INNER JOIN user_to_space uts ON u.id = uts.user_id
-		WHERE uts.space_id = $1
+		WHERE uts.space_id = $1 AND uts.is_pending = FALSE
 	`, spaceID)
 	if err != nil {
 		return nil, err
@@ -226,7 +244,7 @@ func (r *SpacesRepository) GetUsersInSpacePaginated(spaceID, offset, limit int) 
 		SELECT COUNT(*)
 		FROM users u
 		INNER JOIN user_to_space uts ON u.id = uts.user_id
-		WHERE uts.space_id = $1
+		WHERE uts.space_id = $1 AND uts.is_pending = FALSE
 	`, spaceID).Scan(&total)
 	if err != nil {
 		return nil, 0, err
@@ -237,7 +255,7 @@ func (r *SpacesRepository) GetUsersInSpacePaginated(spaceID, offset, limit int) 
 		SELECT u.id, u.username, u.created_at, uts.role_id
 		FROM users u
 		INNER JOIN user_to_space uts ON u.id = uts.user_id
-		WHERE uts.space_id = $1
+		WHERE uts.space_id = $1 AND uts.is_pending = FALSE
 		ORDER BY u.id
 		LIMIT $2 OFFSET $3
 	`, spaceID, limit, offset)

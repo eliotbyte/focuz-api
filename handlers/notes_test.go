@@ -71,7 +71,7 @@ func (s *E2ETestSuite) Test25_CreateNoteAsGuestInNotebook() {
 	defer resp.Body.Close()
 	s.Equal(http.StatusOK, resp.StatusCode)
 
-	// Now create note as guest
+	// Attempt to create note as guest BEFORE accepting -> should be forbidden (pending)
 	reqBody2 := map[string]interface{}{
 		"text":    "Guest notebook note",
 		"tags":    []string{"guest", "notebook"},
@@ -82,11 +82,27 @@ func (s *E2ETestSuite) Test25_CreateNoteAsGuestInNotebook() {
 	req2, _ := http.NewRequest("POST", s.baseURL+"/notes", bytes.NewBuffer(jsonBody2))
 	req2.Header.Set("Authorization", "Bearer "+s.guestToken)
 	req2.Header.Set("Content-Type", "application/json")
-	client2 := &http.Client{}
-	resp2, err2 := client2.Do(req2)
+	resp2, err2 := (&http.Client{}).Do(req2)
 	s.NoError(err2)
 	defer resp2.Body.Close()
-	s.Equal(http.StatusCreated, resp2.StatusCode)
+	s.Equal(http.StatusForbidden, resp2.StatusCode)
+
+	// Accept invitation
+	reqAcc, _ := http.NewRequest("POST", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/invitations/accept", nil)
+	reqAcc.Header.Set("Authorization", "Bearer "+s.guestToken)
+	respAcc, errAcc := (&http.Client{}).Do(reqAcc)
+	s.NoError(errAcc)
+	defer respAcc.Body.Close()
+	s.Equal(http.StatusOK, respAcc.StatusCode)
+
+	// Now create note as guest -> should succeed
+	req3, _ := http.NewRequest("POST", s.baseURL+"/notes", bytes.NewBuffer(jsonBody2))
+	req3.Header.Set("Authorization", "Bearer "+s.guestToken)
+	req3.Header.Set("Content-Type", "application/json")
+	resp3, err3 := (&http.Client{}).Do(req3)
+	s.NoError(err3)
+	defer resp3.Body.Close()
+	s.Equal(http.StatusCreated, resp3.StatusCode)
 }
 
 func (s *E2ETestSuite) Test26_CreateNoteAsGuestInDashboard() {
@@ -119,6 +135,43 @@ func (s *E2ETestSuite) Test26_CreateNoteAsGuestInDashboard() {
 	s.NoError(err2)
 	defer resp2.Body.Close()
 	s.Equal(http.StatusForbidden, resp2.StatusCode)
+}
+
+func (s *E2ETestSuite) Test26B_DeclineInvitationPreventsAccess() {
+	// Re-invite guest
+	reqBody := map[string]string{"username": "guest"}
+	b, _ := json.Marshal(reqBody)
+	req, _ := http.NewRequest("POST", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/invite", bytes.NewBuffer(b))
+	req.Header.Set("Authorization", "Bearer "+s.ownerToken)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := (&http.Client{}).Do(req)
+	s.NoError(err)
+	defer resp.Body.Close()
+	s.Equal(http.StatusOK, resp.StatusCode)
+
+	// Decline invitation
+	reqDec, _ := http.NewRequest("POST", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/invitations/decline", nil)
+	reqDec.Header.Set("Authorization", "Bearer "+s.guestToken)
+	respDec, errDec := (&http.Client{}).Do(reqDec)
+	s.NoError(errDec)
+	defer respDec.Body.Close()
+	s.Equal(http.StatusOK, respDec.StatusCode)
+
+	// Attempt to create note after decline -> still forbidden
+	reqNote := map[string]interface{}{
+		"text":    "should fail",
+		"tags":    []string{"guest"},
+		"date":    time.Now().Format(time.RFC3339),
+		"topicId": s.createdTopicID,
+	}
+	bn, _ := json.Marshal(reqNote)
+	reqN, _ := http.NewRequest("POST", s.baseURL+"/notes", bytes.NewBuffer(bn))
+	reqN.Header.Set("Authorization", "Bearer "+s.guestToken)
+	reqN.Header.Set("Content-Type", "application/json")
+	respN, errN := (&http.Client{}).Do(reqN)
+	s.NoError(errN)
+	defer respN.Body.Close()
+	s.Equal(http.StatusForbidden, respN.StatusCode)
 }
 
 func (s *E2ETestSuite) Test27_EditNote() {

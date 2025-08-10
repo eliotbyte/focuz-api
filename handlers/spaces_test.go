@@ -154,6 +154,19 @@ func (s *E2ETestSuite) Test15_RemoveUser_CannotRemoveOwner() {
 }
 
 func (s *E2ETestSuite) Test16_RemoveUser_Success() {
+	// Ensure guest is an active member (not pending) before removal
+	accReq, _ := http.NewRequest(
+		"POST",
+		s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/invitations/accept",
+		nil,
+	)
+	accReq.Header.Set("Authorization", "Bearer "+s.guestToken)
+	accResp, err := (&http.Client{}).Do(accReq)
+	s.NoError(err)
+	defer accResp.Body.Close()
+	// Accept may be idempotent if already accepted; allow 200
+	s.Equal(http.StatusOK, accResp.StatusCode)
+
 	req, _ := http.NewRequest(
 		"DELETE",
 		s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/users/3",

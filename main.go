@@ -5,7 +5,9 @@ import (
 	"focuz-api/handlers"
 	"focuz-api/initializers"
 	"focuz-api/middleware"
+	"focuz-api/pkg/notify"
 	"focuz-api/repository"
+	"focuz-api/websocket"
 	"log"
 	"os"
 	"strings"
@@ -75,25 +77,7 @@ func main() {
 	activitiesRepo := repository.NewActivitiesRepository(db)
 	attachmentsRepo := repository.NewAttachmentsRepository(db)
 	chartsRepo := repository.NewChartsRepository(db)
-
-	notesHandler := handlers.NewNotesHandler(notesRepo, spacesRepo, topicsRepo)
-	spacesHandler := handlers.NewSpacesHandler(spacesRepo, rolesRepo)
-	topicsHandler := handlers.NewTopicsHandler(topicsRepo, spacesRepo, rolesRepo)
-	activityTypesHandler := handlers.NewActivityTypesHandler(activityTypesRepo, spacesRepo)
-	activitiesHandler := handlers.NewActivitiesHandler(
-		activitiesRepo,
-		spacesRepo,
-		topicsRepo,
-		notesRepo,
-		activityTypesRepo,
-	)
-	attachmentsHandler := handlers.NewAttachmentsHandler(attachmentsRepo, notesRepo, spacesRepo, topicsRepo)
-	chartsHandler := handlers.NewChartsHandler(chartsRepo, spacesRepo, topicsRepo, activityTypesRepo)
-
-	// Set Gin to release mode in production
-	if os.Getenv("GIN_MODE") == "release" || strings.ToLower(os.Getenv("APP_ENV")) == "production" {
-		gin.SetMode(gin.ReleaseMode)
-	}
+	notificationsRepo := repository.NewNotificationsRepository(db)
 
 	r := gin.Default()
 
@@ -116,16 +100,48 @@ func main() {
 	// Apply rate limiting globally after CORS but before routes
 	r.Use(middleware.RateLimitMiddleware())
 
+	// Initialize WebSocket hub and notifier
+	hub := websocket.NewHub()
+	notifier := &notify.WSNotifier{Hub: hub}
+
 	// Public endpoints
 	r.GET("/health", handlers.HealthCheck)
 
+	// Auth-free WS doesn't make sense here; protect it with JWT
+	auth := r.Group("/", handlers.AuthMiddleware(jwtSecret))
+	{
+		auth.GET("/ws", websocket.ServeWS(hub))
+	}
+
+	// Handlers
+	notesHandler := handlers.NewNotesHandler(notesRepo, spacesRepo, topicsRepo)
+	spacesHandler := handlers.NewSpacesHandler(spacesRepo, rolesRepo).WithNotifier(notifier).WithNotificationsRepo(notificationsRepo)
+	topicsHandler := handlers.NewTopicsHandler(topicsRepo, spacesRepo, rolesRepo)
+	activityTypesHandler := handlers.NewActivityTypesHandler(activityTypesRepo, spacesRepo)
+	activitiesHandler := handlers.NewActivitiesHandler(
+		activitiesRepo,
+		spacesRepo,
+		topicsRepo,
+		notesRepo,
+		activityTypesRepo,
+	)
+	attachmentsHandler := handlers.NewAttachmentsHandler(attachmentsRepo, notesRepo, spacesRepo, topicsRepo)
+	chartsHandler := handlers.NewChartsHandler(chartsRepo, spacesRepo, topicsRepo, activityTypesRepo)
+	notificationsHandler := handlers.NewNotificationsHandler(notificationsRepo)
+
+	// Set Gin to release mode in production
+	if os.Getenv("GIN_MODE") == "release" || strings.ToLower(os.Getenv("APP_ENV")) == "production" {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
+	// Public endpoints
 	r.POST("/register", notesHandler.Register)
 	r.POST("/login", func(c *gin.Context) {
 		c.Set("jwtSecret", jwtSecret)
 		notesHandler.Login(c)
 	})
 
-	auth := r.Group("/", handlers.AuthMiddleware(jwtSecret))
+	auth = r.Group("/", handlers.AuthMiddleware(jwtSecret))
 	{
 		auth.GET("/spaces", spacesHandler.GetAccessibleSpaces)
 		auth.DELETE("/spaces/:spaceId/users/:userId", spacesHandler.RemoveUser)
@@ -135,6 +151,8 @@ func main() {
 		auth.PATCH("/spaces/:spaceId/delete", spacesHandler.DeleteSpace)
 		auth.PATCH("/spaces/:spaceId/restore", spacesHandler.RestoreSpace)
 		auth.POST("/spaces/:spaceId/invite", spacesHandler.InviteUser)
+		auth.POST("/spaces/:spaceId/invitations/accept", spacesHandler.AcceptInvitation)
+		auth.POST("/spaces/:spaceId/invitations/decline", spacesHandler.DeclineInvitation)
 
 		auth.POST("/topics", topicsHandler.CreateTopic)
 		auth.PATCH("/topics/:id", topicsHandler.UpdateTopic)
@@ -172,6 +190,8 @@ func main() {
 
 		auth.POST("/upload", attachmentsHandler.UploadFile)
 		auth.GET("/files/:id", attachmentsHandler.GetFile)
+		auth.GET("/notifications/unread", notificationsHandler.ListUnread)
+		auth.POST("/notifications/mark-read", notificationsHandler.MarkRead)
 	}
 
 	r.Run(":8080")

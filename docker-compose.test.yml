@@ -41,7 +41,6 @@ services:
       dockerfile: Dockerfile
     environment:
       DATABASE_URL: postgres://postgres:password@test-db:5432/focuz_test?sslmode=disable
-      E2E: "1"
       APP_ENV: test
       RATE_LIMIT_ENABLED: "false"
       MINIO_ENDPOINT: test-minio:9000
@@ -73,8 +72,8 @@ services:
     image: golang:1.24-alpine
     environment:
       DATABASE_URL: postgres://postgres:password@test-db:5432/focuz_test?sslmode=disable
-      E2E: "1"
       API_URL: http://test-api:8080
+      DOCKER: "1"
     depends_on:
       test-api:
         condition: service_started

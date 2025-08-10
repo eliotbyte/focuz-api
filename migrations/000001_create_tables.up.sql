@@ -26,6 +26,7 @@ CREATE TABLE user_to_space (
     user_id INTEGER NOT NULL REFERENCES users(id),
     space_id INTEGER NOT NULL REFERENCES space(id),
     role_id INTEGER NOT NULL REFERENCES role(id),
+    is_pending BOOLEAN NOT NULL DEFAULT FALSE,
     UNIQUE (user_id, space_id)
 );
 
@@ -134,6 +135,19 @@ CREATE TABLE chart (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     modified_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
+-- Notifications
+CREATE TABLE notifications (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    type VARCHAR(50) NOT NULL,
+    payload JSONB NOT NULL,
+    is_read BOOLEAN NOT NULL DEFAULT FALSE,
+    sticky BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    read_at TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, is_read, created_at DESC);
 
 -- Insert dashboard topic type
 INSERT INTO topic_type (name) VALUES ('dashboard') ON CONFLICT (name) DO NOTHING;

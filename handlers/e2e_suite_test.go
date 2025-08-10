@@ -22,7 +22,7 @@ type E2ETestSuite struct {
 
 func (s *E2ETestSuite) SetupSuite() {
 	// Use test API container name when running in Docker, localhost otherwise
-	if os.Getenv("E2E") != "" {
+	if os.Getenv("CI") != "" || os.Getenv("DOCKER") != "" {
 		s.baseURL = "http://test-api:8080"
 	} else {
 		s.baseURL = "http://localhost:8080"
@@ -54,7 +54,5 @@ func (s *E2ETestSuite) createTopic(name string, typeID int) int {
 }
 
 func TestE2ETestSuite(t *testing.T) {
-	if os.Getenv("E2E") != "" {
-		suite.Run(t, new(E2ETestSuite))
-	}
+	suite.Run(t, new(E2ETestSuite))
 }

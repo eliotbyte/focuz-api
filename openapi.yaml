@@ -304,6 +304,50 @@ paths:
               schema:
                 $ref: '#/components/schemas/APIResponse'
 
+  /spaces/{spaceId}/invitations/accept:
+    post:
+      summary: Accept an invitation to join a space
+      description: Effective only when INVITATIONS_REQUIRE_ACCEPT=true in server environment.
+      tags:
+        - Spaces
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: spaceId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Invitation accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
+  /spaces/{spaceId}/invitations/decline:
+    post:
+      summary: Decline an invitation to join a space
+      description: Effective only when INVITATIONS_REQUIRE_ACCEPT=true in server environment.
+      tags:
+        - Spaces
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: spaceId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Invitation declined
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
   /topics:
     post:
       summary: Create a topic
@@ -1070,6 +1114,42 @@ paths:
       responses:
         '200':
           description: File
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
+  /notifications/unread:
+    get:
+      summary: List unread notifications
+      tags: [Notifications]
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          description: Unread notifications
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+  /notifications/mark-read:
+    post:
+      summary: Mark notifications as read
+      tags: [Notifications]
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ids:
+                  type: array
+                  items: { type: integer }
+              required: [ids]
+      responses:
+        '200':
+          description: Marked
           content:
             application/json:
               schema:
