@@ -20,6 +20,9 @@ paths:
       responses:
         '200':
           description: Service health
+          headers:
+            X-Request-ID:
+              $ref: '#/components/parameters/XRequestID'
           content:
             application/json:
               schema:
@@ -69,6 +72,9 @@ paths:
       responses:
         '200':
           description: Successful authentication
+          headers:
+            X-Request-ID:
+              $ref: '#/components/parameters/XRequestID'
           content:
             application/json:
               schema:
@@ -1161,6 +1167,15 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+
+  parameters:
+    XRequestID:
+      name: X-Request-ID
+      in: header
+      required: false
+      description: Optional request correlation ID. If provided, the server will echo it back. Otherwise, the server generates one.
+      schema:
+        type: string
 
   schemas:
     APIResponse:

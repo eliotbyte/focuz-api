@@ -79,7 +79,12 @@ func main() {
 	chartsRepo := repository.NewChartsRepository(db)
 	notificationsRepo := repository.NewNotificationsRepository(db)
 
-	r := gin.Default()
+	r := gin.New()
+	// Structured request ID and JSON access logs
+	r.Use(middleware.RequestIDMiddleware())
+	r.Use(middleware.LoggerMiddleware())
+	// Panic recovery
+	r.Use(gin.Recovery())
 
 	// Configure trusted proxies for correct client IP handling in production
 	trustedProxies := os.Getenv("TRUSTED_PROXIES")
