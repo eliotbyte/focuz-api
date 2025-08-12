@@ -17,6 +17,7 @@ WORKDIR /root
 
 COPY --from=builder /app/focuz-api .
 COPY --from=builder /app/migrations ./migrations
+COPY --from=builder /app/config ./config
 
 RUN apk --no-cache add postgresql-client
 

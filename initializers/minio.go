@@ -12,6 +12,7 @@ import (
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+	"gopkg.in/yaml.v3"
 )
 
 type MinioConfig struct {
@@ -30,6 +31,31 @@ var MinioClient *minio.Client
 var ExternalMinioClient *minio.Client
 var Conf MinioConfig
 
+// uploadsConfigYAML defines optional YAML configuration for upload settings.
+// If present, it overrides environment variables for upload-related fields.
+type uploadsConfigYAML struct {
+	MaxFileSize        int64    `yaml:"max_file_size"`
+	AllowedFileTypes   []string `yaml:"allowed_file_types"`
+	PresignedURLExpiry int      `yaml:"presigned_url_expiry"` // seconds
+}
+
+// loadUploadsConfig tries to load YAML config from disk. If not found, returns nil with error.
+func loadUploadsConfig() (*uploadsConfigYAML, error) {
+	path := os.Getenv("UPLOADS_CONFIG_FILE")
+	if strings.TrimSpace(path) == "" {
+		path = "config/uploads.yaml"
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var cfg uploadsConfigYAML
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, err
+	}
+	return &cfg, nil
+}
+
 func InitMinio() error {
 	Conf = MinioConfig{
 		Endpoint:         os.Getenv("MINIO_ENDPOINT"),
@@ -42,6 +68,20 @@ func InitMinio() error {
 		Expiry:           parseExpiry(os.Getenv("PRESIGNED_URL_EXPIRY")),
 		ExternalEndpoint: os.Getenv("MINIO_EXTERNAL_ENDPOINT"),
 	}
+
+	// If YAML config exists, override upload-related settings
+	if yamlCfg, err := loadUploadsConfig(); err == nil && yamlCfg != nil {
+		if yamlCfg.MaxFileSize > 0 {
+			Conf.MaxSize = yamlCfg.MaxFileSize
+		}
+		if len(yamlCfg.AllowedFileTypes) > 0 {
+			Conf.FileTypes = yamlCfg.AllowedFileTypes
+		}
+		if yamlCfg.PresignedURLExpiry > 0 {
+			Conf.Expiry = time.Duration(yamlCfg.PresignedURLExpiry) * time.Second
+		}
+	}
+
 	client, err := minio.New(Conf.Endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(Conf.AccessKey, Conf.SecretKey, ""),
 		Secure: Conf.UseSSL,

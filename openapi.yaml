@@ -1170,6 +1170,12 @@ paths:
   /upload:
     post:
       summary: Upload a file
+      description: |
+        Upload a file attachment for a note. The server validates file size and type against a server-side policy.
+        Allowed MIME types and maximum size are configured on the server (not via client headers).
+        Default limits:
+        - Max size: 10 MB
+        - Allowed types: image/jpeg, image/png, application/pdf, text/plain
       tags:
         - Attachments
       security:
@@ -1189,6 +1195,12 @@ paths:
       responses:
         '201':
           description: File uploaded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+        '400':
+          description: Invalid request (e.g., disallowed file type or too large)
           content:
             application/json:
               schema:
