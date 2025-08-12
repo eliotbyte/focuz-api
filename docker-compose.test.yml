@@ -42,7 +42,6 @@ services:
     environment:
       DATABASE_URL: postgres://postgres:password@test-db:5432/focuz_test?sslmode=disable
       APP_ENV: test
-      RATE_LIMIT_ENABLED: "false"
       MINIO_ENDPOINT: test-minio:9000
       MINIO_EXTERNAL_ENDPOINT: localhost:9002
       MINIO_ACCESS_KEY: minioadmin
