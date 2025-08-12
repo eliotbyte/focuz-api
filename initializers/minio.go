@@ -162,5 +162,24 @@ func GenerateAttachmentURL(id, fileName string) (string, error) {
 }
 
 func sanitizeFilename(name string) string {
-	return strings.ReplaceAll(name, "\"", "")
+	// Remove double quotes, path separators, and control characters; collapse spaces
+	cleaned := strings.ReplaceAll(name, "\"", "")
+	cleaned = strings.ReplaceAll(cleaned, "\\", "")
+	cleaned = strings.ReplaceAll(cleaned, "/", "")
+	cleaned = strings.ReplaceAll(cleaned, "..", "")
+	// Remove control characters
+	b := make([]rune, 0, len(cleaned))
+	for _, r := range cleaned {
+		if r < 32 || r == 127 {
+			continue
+		}
+		b = append(b, r)
+	}
+	s := strings.TrimSpace(string(b))
+	// Replace multiple spaces with single
+	s = strings.Join(strings.Fields(s), " ")
+	if s == "" {
+		s = "file"
+	}
+	return s
 }

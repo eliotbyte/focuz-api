@@ -128,9 +128,9 @@ CREATE TABLE chart (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL REFERENCES users(id),
     topic_id INTEGER NOT NULL REFERENCES topic(id),
-    kind VARCHAR(50) NOT NULL,
+    kind INTEGER NOT NULL,
     activity_type_id INTEGER NOT NULL REFERENCES activity_types(id),
-    period VARCHAR(50) NOT NULL,
+    period INTEGER NOT NULL,
     is_deleted BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     modified_at TIMESTAMP NOT NULL DEFAULT NOW()
@@ -162,3 +162,7 @@ CREATE INDEX IF NOT EXISTS idx_attachments_note_id ON attachments(note_id);
 CREATE INDEX IF NOT EXISTS idx_activities_note_id ON activities(note_id);
 CREATE INDEX IF NOT EXISTS idx_activities_type_id ON activities(type_id);
 CREATE INDEX IF NOT EXISTS idx_activity_types_space_id ON activity_types(space_id);
+-- Additional helpful indexes
+CREATE INDEX IF NOT EXISTS idx_tag_name ON tag(name);
+CREATE INDEX IF NOT EXISTS idx_note_to_tag_note ON note_to_tag(note_id);
+CREATE INDEX IF NOT EXISTS idx_note_to_tag_tag ON note_to_tag(tag_id);

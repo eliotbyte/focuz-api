@@ -112,11 +112,20 @@ docker-compose up -d
 ### Local development
 ```bash
 # Start only the database and MinIO
-docker-compose up db minio -d
+# IMPORTANT: the DB image includes PGroonga extension required by migrations
+# If you run Postgres yourself, ensure PGroonga is installed, or migrations will fail
+# Recommended:
+ docker-compose up db minio -d
 
 # Run the API locally
-go run main.go
+ go run main.go
 ```
+
+### Environment notes
+- `ALLOWED_ORIGINS`: comma-separated origins allowed in production for CORS and WebSocket (e.g. `https://app.example.com,https://staging.example.com`).
+- `TRUSTED_PROXIES`: comma-separated proxy CIDRs or IPs for correct client IP; defaults to `127.0.0.1, ::1` when unset.
+- `RATE_LIMIT_RPS`, `RATE_LIMIT_BURST`, `RATE_LIMIT_WHITELIST`, `RATE_LIMIT_ENABLED`: tune/disable rate limiting.
+- `MINIO_EXTERNAL_ENDPOINT`: external hostname:port for presigned URLs; if empty, internal endpoint is used.
 
 ## API Documentation
 

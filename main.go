@@ -98,7 +98,7 @@ func main() {
 		}
 	} else {
 		// Default to loopback only; override via TRUSTED_PROXIES in production
-		_ = r.SetTrustedProxies([]string{"127.0.0.1"})
+		_ = r.SetTrustedProxies([]string{"127.0.0.1", "::1"})
 	}
 
 	r.Use(middleware.CORSMiddleware())
@@ -112,7 +112,7 @@ func main() {
 	// Public endpoints
 	r.GET("/health", handlers.HealthCheck)
 
-	// Auth-free WS doesn't make sense here; protect it with JWT
+	// Auth-protected WebSocket
 	auth := r.Group("/", handlers.AuthMiddleware(jwtSecret))
 	{
 		auth.GET("/ws", websocket.ServeWS(hub))
@@ -139,9 +139,10 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	// Public endpoints
-	r.POST("/register", notesHandler.Register)
-	r.POST("/login", func(c *gin.Context) {
+	// Public endpoints with stricter auth rate limit
+	authPublic := r.Group("/", middleware.RateLimitAuthMiddleware())
+	authPublic.POST("/register", notesHandler.Register)
+	authPublic.POST("/login", func(c *gin.Context) {
 		c.Set("jwtSecret", jwtSecret)
 		notesHandler.Login(c)
 	})

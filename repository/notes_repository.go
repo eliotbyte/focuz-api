@@ -367,10 +367,17 @@ func (r *NotesRepository) GetNotes(userID, spaceID int, topicID *int, filters mo
 	}
 
 	sortField := "n.created_at"
-	if filters.SortField == "modifiedat" {
+	switch strings.ToLower(filters.SortField) {
+	case "created_at", "createdat":
+		sortField = "n.created_at"
+	case "modified_at", "modifiedat":
 		sortField = "n.modified_at"
 	}
-	query += " ORDER BY " + sortField + " " + filters.SortOrder
+	order := strings.ToUpper(filters.SortOrder)
+	if order != "ASC" && order != "DESC" {
+		order = "DESC"
+	}
+	query += " ORDER BY " + sortField + " " + order
 	query += " LIMIT $" + strconv.Itoa(idx) + " OFFSET $" + strconv.Itoa(idx+1)
 	params = append(params, filters.PageSize, offset)
 

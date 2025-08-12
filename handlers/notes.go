@@ -45,7 +45,7 @@ func AuthMiddleware(secret string) gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		token, err := jwt.Parse(parts[1], func(token *jwt.Token) (interface{}, error) {
+		token, err := jwt.ParseWithClaims(parts[1], jwt.MapClaims{}, func(token *jwt.Token) (interface{}, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, jwt.ErrSignatureInvalid
 			}
@@ -58,6 +58,12 @@ func AuthMiddleware(secret string) gin.HandlerFunc {
 		}
 		claims, ok := token.Claims.(jwt.MapClaims)
 		if !ok || !token.Valid {
+			c.JSON(http.StatusUnauthorized, types.NewErrorResponse(types.ErrorCodeInvalidToken, "Invalid token claims"))
+			c.Abort()
+			return
+		}
+		// Validate issuer and audience for additional hardening
+		if claims["iss"] != "focuz-api" || claims["aud"] != "focuz-fe" {
 			c.JSON(http.StatusUnauthorized, types.NewErrorResponse(types.ErrorCodeInvalidToken, "Invalid token claims"))
 			c.Abort()
 			return
@@ -133,6 +139,8 @@ func (h *NotesHandler) Login(c *gin.Context) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"userId": user.ID,
 		"exp":    time.Now().Add(time.Hour * 24).Unix(),
+		"iss":    "focuz-api",
+		"aud":    "focuz-fe",
 	})
 	tokenString, err := token.SignedString([]byte(c.MustGet("jwtSecret").(string)))
 	if err != nil {
@@ -387,13 +395,19 @@ func (h *NotesHandler) GetNotes(c *gin.Context) {
 	if sortParam != "" {
 		parts := strings.Split(sortParam, ",")
 		if len(parts) == 2 {
-			field := strings.ToLower(parts[0])
-			order := strings.ToUpper(parts[1])
-			if field == "createdat" || field == "modifiedat" {
-				sortField = field
-				if order == "ASC" || order == "DESC" {
-					sortOrder = order
-				}
+			field := strings.ToLower(strings.TrimSpace(parts[0]))
+			order := strings.ToUpper(strings.TrimSpace(parts[1]))
+
+			// Normalize supported fields to DB column names
+			switch field {
+			case "createdat", "created_at":
+				sortField = "created_at"
+			case "modifiedat", "modified_at":
+				sortField = "modified_at"
+			}
+
+			if order == "ASC" || order == "DESC" {
+				sortOrder = order
 			}
 		}
 	}

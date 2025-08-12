@@ -196,3 +196,30 @@ func RateLimitMiddleware() gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+// RateLimitAuthMiddleware applies a stricter per-IP limit for auth endpoints such as /login and /register.
+// It is independent from the global limiter to avoid allowing brute force via general limits.
+func RateLimitAuthMiddleware() gin.HandlerFunc {
+	if isDisabled() {
+		return func(c *gin.Context) { c.Next() }
+	}
+	// Hard-coded stricter limits suitable for auth: 1 rps, burst 5
+	r := rate.Limit(1.0)
+	burst := 5
+	store := newIPLimiterStore(10 * time.Minute)
+	return func(c *gin.Context) {
+		if c.Request.Method == http.MethodOptions {
+			c.Next()
+			return
+		}
+		clientIP := c.ClientIP()
+		lim := store.getOrCreate("auth:"+clientIP, r, burst)
+		if !lim.Allow() {
+			c.Header("Retry-After", "1")
+			c.JSON(http.StatusTooManyRequests, types.NewErrorResponse("RATE_LIMIT_EXCEEDED", "Too many requests"))
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}

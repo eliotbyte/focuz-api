@@ -2,12 +2,10 @@ package handlers
 
 import (
 	"context"
-	"fmt"
 	"focuz-api/initializers"
 	"focuz-api/repository"
 	"focuz-api/types"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 
@@ -16,7 +14,6 @@ import (
 	"github.com/gabriel-vasile/mimetype"
 	"github.com/gin-gonic/gin"
 	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
 type AttachmentsHandler struct {
@@ -188,46 +185,13 @@ func (h *AttachmentsHandler) GetFile(c *gin.Context) {
 		return
 	}
 
-	reqParams := url.Values{}
-	reqParams.Set("response-content-disposition", fmt.Sprintf("inline; filename=\"%s\"", sanitizeFilename(att.FileName)))
-
-	expiry := initializers.Conf.Expiry
-
-	// Извлекаем только хост без схемы из ExternalEndpoint
-	extEndpoint := initializers.Conf.ExternalEndpoint
-	if strings.HasPrefix(extEndpoint, "http://") {
-		extEndpoint = strings.TrimPrefix(extEndpoint, "http://")
-	} else if strings.HasPrefix(extEndpoint, "https://") {
-		extEndpoint = strings.TrimPrefix(extEndpoint, "https://")
-	}
-
-	externalClient, err := minio.New(extEndpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(initializers.Conf.AccessKey, initializers.Conf.SecretKey, ""),
-		Secure: initializers.Conf.UseSSL,
-		Region: "us-east-1", // добавляем регион для корректного расчёта подписи
-	})
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, "failed to create external minio client"))
-		return
-	}
-
-	presignedURL, err := externalClient.PresignedGetObject(
-		context.Background(),
-		initializers.Conf.Bucket,
-		att.ID,
-		expiry,
-		reqParams,
-	)
+	url, err := initializers.GenerateAttachmentURL(att.ID, att.FileName)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, "failed to create presigned url"))
 		return
 	}
 
 	c.JSON(http.StatusOK, types.NewSuccessResponse(gin.H{
-		"url": presignedURL.String(),
+		"url": url,
 	}))
-}
-
-func sanitizeFilename(name string) string {
-	return strings.ReplaceAll(name, "\"", "")
 }

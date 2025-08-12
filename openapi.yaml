@@ -92,6 +92,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/APIResponse'
 
+  /ws:
+    get:
+      summary: WebSocket connection
+      description: Upgrades to WebSocket. Requires a valid Bearer token.
+      tags:
+        - Realtime
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Upgrade to WebSocket (101 Switching Protocols)
+
   /spaces:
     get:
       summary: Get available workspaces
@@ -121,8 +133,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedResponse'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/parameters/XRequestID'
         '429':
           description: Too many requests (rate limited)
+          headers:
+            Retry-After:
+              description: Seconds until next allowed request
+              schema:
+                type: integer
           content:
             application/json:
               schema:
@@ -256,6 +276,9 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedResponse'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/parameters/XRequestID'
 
   /spaces/{spaceId}/invite:
     post:
@@ -502,6 +525,11 @@ paths:
       security:
         - BearerAuth: []
       parameters:
+        - name: spaceId
+          in: query
+          required: true
+          schema:
+            type: integer
         - name: topicId
           in: query
           schema:
@@ -572,6 +600,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedResponse'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/parameters/XRequestID'
+        '429':
+          description: Too many requests (rate limited)
+          headers:
+            Retry-After:
+              description: Seconds until next allowed request
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
     post:
       summary: Create a note
       tags:
@@ -591,6 +633,9 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/APIResponse'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/parameters/XRequestID'
 
   /notes/{id}:
     get:
@@ -689,32 +734,60 @@ paths:
           required: true
           schema:
             type: integer
+        - name: typeId
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: periodId
+          in: query
+          required: true
+          schema:
+            type: integer
+            enum: [1, 2, 3, 4]
+          description: 1=day, 2=week, 3=month, 4=year
         - name: topicId
           in: query
           schema:
             type: integer
-        - name: activityTypeId
-          in: query
-          schema:
-            type: integer
-        - name: period
-          in: query
-          schema:
-            type: string
-            enum: [day, week, month, year]
-        - name: from
+        - name: startDate
           in: query
           schema:
             type: string
             format: date-time
-        - name: to
+          description: RFC3339 timestamp
+        - name: endDate
           in: query
           schema:
             type: string
             format: date-time
+          description: RFC3339 timestamp
+        - name: tags
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+          description: Array of tags. Use '!' prefix to exclude tags
       responses:
         '200':
-          description: Activity analysis
+          description: Analysis
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/parameters/XRequestID'
+        '429':
+          description: Too many requests (rate limited)
+          headers:
+            Retry-After:
+              description: Seconds until next allowed request
+              schema:
+                type: integer
           content:
             application/json:
               schema:
@@ -810,7 +883,7 @@ paths:
 
   /spaces/{spaceId}/activity-types:
     get:
-      summary: Get activity types in a workspace
+      summary: Get activity types in space (default + space-specific)
       tags:
         - Activity Types
       security:
@@ -842,6 +915,9 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedResponse'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/parameters/XRequestID'
     post:
       summary: Create an activity type
       tags:
@@ -958,6 +1034,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedResponse'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/parameters/XRequestID'
+        '429':
+          description: Too many requests (rate limited)
+          headers:
+            Retry-After:
+              description: Seconds until next allowed request
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
     post:
       summary: Create a chart
       tags:
@@ -1090,12 +1180,12 @@ paths:
           multipart/form-data:
             schema:
               type: object
-                             properties:
-                 file:
-                   type: string
-                   format: binary
-                 note_id:
-                   type: integer
+              properties:
+                file:
+                  type: string
+                  format: binary
+                note_id:
+                  type: integer
       responses:
         '201':
           description: File uploaded
@@ -1178,292 +1268,228 @@ components:
         type: string
 
   schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        timestamp:
+          type: string
+        version:
+          type: string
+
     APIResponse:
       type: object
       properties:
         success:
           type: boolean
         data:
-          type: object
+          nullable: true
         error:
-          $ref: '#/components/schemas/APIError'
-      required:
-        - success
+          nullable: true
 
     PaginatedResponse:
       type: object
       properties:
+        success:
+          type: boolean
         data:
-          type: array
-          items:
-            type: object
-        pagination:
           type: object
           properties:
-            page:
-              type: integer
-              example: 1
-            pageSize:
-              type: integer
-              example: 20
-            total:
-              type: integer
-              example: 150
-            totalPages:
-              type: integer
-              example: 8
-          required:
-            - page
-            - pageSize
-            - total
-            - totalPages
-      required:
-        - data
-        - pagination
-
-    APIError:
-      type: object
-      properties:
-        code:
-          type: string
-          example: "VALIDATION_ERROR"
-        message:
-          type: string
-          example: "Invalid input data"
-        details:
-          type: object
-          additionalProperties: true
-
-    HealthResponse:
-      type: object
-      properties:
-        status:
-          type: string
-          example: ok
-        timestamp:
-          type: string
-          format: date-time
-          example: '2025-01-01T12:00:00Z'
-        version:
-          type: string
-          example: '1.0.0'
-      required:
-        - status
-        - timestamp
-        - version
+            data:
+              oneOf:
+                - type: array
+                  items:
+                    $ref: '#/components/schemas/Space'
+                - type: array
+                  items:
+                    $ref: '#/components/schemas/Topic'
+                - type: array
+                  items:
+                    $ref: '#/components/schemas/Note'
+                - type: array
+                  items:
+                    $ref: '#/components/schemas/Chart'
+                - type: array
+                  items:
+                    $ref: '#/components/schemas/ActivityType'
+            pagination:
+              type: object
+              properties:
+                page: { type: integer }
+                pageSize: { type: integer }
+                total: { type: integer }
+                totalPages: { type: integer }
 
     RegisterRequest:
       type: object
-      required:
-        - username
-        - password
+      required: [username, password]
       properties:
         username:
           type: string
           minLength: 3
           maxLength: 50
-          example: "john_doe"
         password:
           type: string
           minLength: 8
-          description: "Password must be at least 8 characters"
-          example: "password1234"
 
     LoginRequest:
       type: object
-      required:
-        - username
-        - password
+      required: [username, password]
       properties:
-        username:
-          type: string
-          example: "john_doe"
-        password:
-          type: string
-          example: "password123"
+        username: { type: string }
+        password: { type: string }
 
     LoginResponse:
       type: object
       properties:
-        success:
-          type: boolean
-          example: true
+        success: { type: boolean }
         data:
           type: object
           properties:
-            token:
-              type: string
-              example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+            token: { type: string }
 
     CreateSpaceRequest:
       type: object
-      required:
-        - name
+      required: [name]
       properties:
         name:
           type: string
-          maxLength: 255
-          example: "My Workspace"
 
-    UpdateSpaceRequest:
+    Space:
       type: object
       properties:
-        name:
-          type: string
-          maxLength: 255
-          example: "Updated Workspace Name"
+        id: { type: integer }
+        name: { type: string }
+        ownerId: { type: integer }
+        createdAt: { type: string, format: date-time }
+        modifiedAt: { type: string, format: date-time }
 
-    InviteUserRequest:
-      type: object
-      required:
-        - username
-      properties:
-        username:
-          type: string
-          example: "jane_doe"
-
-    CreateTopicRequest:
-      type: object
-      required:
-        - spaceId
-        - name
-        - typeId
-      properties:
-        spaceId:
-          type: integer
-          example: 1
-        name:
-          type: string
-          maxLength: 255
-          example: "My Topic"
-        typeId:
-          type: integer
-          example: 1
-
-    UpdateTopicRequest:
+    Topic:
       type: object
       properties:
-        name:
-          type: string
-          maxLength: 255
-          example: "Updated Topic Name"
+        id: { type: integer }
+        spaceId: { type: integer }
+        name: { type: string }
+        typeId: { type: integer }
+        createdAt: { type: string, format: date-time }
+        modifiedAt: { type: string, format: date-time }
+
+    Note:
+      type: object
+      properties:
+        id: { type: integer }
+        userId: { type: integer }
+        text: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+        createdAt: { type: string, format: date-time }
+        modifiedAt: { type: string, format: date-time }
+        date: { type: string, format: date-time }
+        parent:
+          type: object
+          nullable: true
+          properties:
+            id: { type: integer }
+            text: { type: string }
+        replyCount: { type: integer }
+        topicId: { type: integer }
+        activities:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: integer }
+              typeId: { type: integer }
+              value: { type: string }
+              unit: { type: string, nullable: true }
+        attachments:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              url: { type: string }
+              fileName: { type: string }
+              fileType: { type: string }
+              fileSize: { type: integer, format: int64 }
 
     CreateNoteRequest:
       type: object
-      required:
-        - text
-        - date
-        - topicId
+      required: [text, date, topicId]
       properties:
-        text:
-          type: string
-          example: "This is my note content"
-        date:
-          type: string
-          format: date-time
-          example: "2024-01-15T10:30:00Z"
-        topicId:
-          type: integer
-          example: 1
+        text: { type: string }
+        date: { type: string, format: date-time }
+        topicId: { type: integer }
         tags:
           type: array
-          items:
-            type: string
-          example: ["work", "important"]
+          items: { type: string }
         parentId:
           type: integer
-          nullable: true
-          example: null
-
-    CreateActivityRequest:
-      type: object
-      required:
-        - typeId
-        - value
-      properties:
-        typeId:
-          type: integer
-          example: 1
-        value:
-          type: string
-          example: "5"
-        noteId:
-          type: integer
-          nullable: true
-          example: 1
-
-    UpdateActivityRequest:
-      type: object
-      required:
-        - value
-      properties:
-        value:
-          type: string
-          example: "7"
-
-    CreateActivityTypeRequest:
-      type: object
-      required:
-        - name
-        - value_type
-        - aggregation
-      properties:
-        name:
-          type: string
-          maxLength: 255
-          example: "mood"
-        value_type:
-          type: string
-          enum: [integer, float, text, boolean, time]
-          example: "integer"
-        unit:
-          type: string
-          nullable: true
-          example: null
-        min_value:
-          type: number
-          nullable: true
-          example: 1
-        max_value:
-          type: number
-          nullable: true
-          example: 10
-        aggregation:
-          type: string
-          enum: [sum, avg, count, min, max, and, or, count_true, count_false, percentage_true, percentage_false]
-          example: "avg"
-        category_id:
-          type: integer
-          nullable: true
-          example: 1
 
     CreateChartRequest:
       type: object
       required:
         - topicId
-        - kind
+        - kindId
         - activityTypeId
-        - period
+        - periodId
       properties:
         topicId:
           type: integer
           example: 1
-        kind:
-          type: string
-          example: "line"
+        kindId:
+          type: integer
+          example: 1
         activityTypeId:
           type: integer
           example: 1
-        period:
-          type: string
-          example: "week"
+        periodId:
+          type: integer
+          example: 2
 
     UpdateChartRequest:
       type: object
       properties:
-        kind:
-          type: string
-          example: "bar"
-        period:
-          type: string
-          example: "month" 
+        kindId:
+          type: integer
+          example: 2
+        periodId:
+          type: integer
+          example: 3
+        activityTypeId:
+          type: integer
+          example: 5
+
+    Chart:
+      type: object
+      properties:
+        id: { type: integer }
+        userId: { type: integer }
+        topicId: { type: integer }
+        kindId: { type: integer }
+        activityTypeId: { type: integer }
+        periodId: { type: integer }
+        createdAt: { type: string, format: date-time }
+        modifiedAt: { type: string, format: date-time }
+
+    ActivityType:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        valueType: { type: string }
+        minValue: { type: number, nullable: true }
+        maxValue: { type: number, nullable: true }
+        aggregation: { type: string }
+        spaceId: { type: integer, nullable: true }
+        isDefault: { type: boolean }
+        unit: { type: string, nullable: true }
+        categoryId: { type: integer, nullable: true }
+
+    ActivitiesAnalysisItem:
+      type: object
+      properties:
+        period: { type: string }
+        value: { type: number } 

@@ -3,7 +3,9 @@ package websocket
 import (
 	"log/slog"
 	"net/http"
+	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -61,7 +63,6 @@ func (h *Hub) run() {
 	}
 }
 
-// NotifyUser sends a payload to all connected clients of a given user.
 func (h *Hub) NotifyUser(userID int, payload []byte) {
 	if h == nil {
 		return
@@ -71,7 +72,6 @@ func (h *Hub) NotifyUser(userID int, payload []byte) {
 			select {
 			case c.send <- payload:
 			default:
-				// Backpressure: drop and disconnect slow clients
 				close(c.send)
 				delete(set, c)
 			}
@@ -85,7 +85,22 @@ func (h *Hub) NotifyUser(userID int, payload []byte) {
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
-	CheckOrigin:     func(r *http.Request) bool { return true },
+	// In production, only allow origins explicitly listed in ALLOWED_ORIGINS (comma-separated).
+	CheckOrigin: func(r *http.Request) bool {
+		if strings.EqualFold(os.Getenv("APP_ENV"), "production") || gin.Mode() == gin.ReleaseMode {
+			allowed := map[string]struct{}{}
+			for _, o := range strings.Split(os.Getenv("ALLOWED_ORIGINS"), ",") {
+				origin := strings.TrimSpace(o)
+				if origin != "" {
+					allowed[origin] = struct{}{}
+				}
+			}
+			origin := r.Header.Get("Origin")
+			_, ok := allowed[origin]
+			return ok
+		}
+		return true
+	},
 }
 
 // ServeWS upgrades HTTP connection to WebSocket and registers the client.
