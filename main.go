@@ -129,7 +129,7 @@ func main() {
 		activityTypesRepo,
 	)
 	attachmentsHandler := handlers.NewAttachmentsHandler(attachmentsRepo, notesRepo, spacesRepo)
-	chartsHandler := handlers.NewChartsHandler(chartsRepo, spacesRepo, activityTypesRepo)
+	chartsHandler := handlers.NewChartsHandler(chartsRepo, spacesRepo, activityTypesRepo, notesRepo)
 	notificationsHandler := handlers.NewNotificationsHandler(notificationsRepo)
 	filtersHandler := handlers.NewFiltersHandler(filtersRepo, spacesRepo)
 
@@ -175,6 +175,7 @@ func main() {
 		auth.GET("/charts", chartsHandler.GetCharts)
 		auth.GET("/chart-types", chartsHandler.GetChartTypes)
 		auth.GET("/period-types", chartsHandler.GetPeriodTypes)
+		auth.GET("/charts/:id/data", chartsHandler.GetChartData)
 
 		auth.GET("/spaces/:spaceId/activity-types", activityTypesHandler.GetActivityTypesBySpace)
 		auth.POST("/spaces/:spaceId/activity-types", activityTypesHandler.CreateActivityType)

@@ -1001,6 +1001,64 @@ paths:
               schema:
                 $ref: '#/components/schemas/APIResponse'
 
+  /charts/{id}/data:
+    get:
+      summary: Get chart data
+      tags:
+        - Charts
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: RFC3339 timestamp
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: RFC3339 timestamp
+        - name: tags
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+          description: Array of tags. Use '!' prefix to exclude tags
+      responses:
+        '200':
+          description: Chart data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    date: { type: string, format: date-time }
+                    value: { type: number }
+        '429':
+          description: Too many requests (rate limited)
+          headers:
+            Retry-After:
+              description: Seconds until next allowed request
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIResponse'
+
   /chart-types:
     get:
       summary: Get chart types
@@ -1452,6 +1510,7 @@ components:
         - kindId
         - activityTypeId
         - periodId
+        - name
       properties:
         spaceId:
           type: integer
@@ -1465,6 +1524,13 @@ components:
         periodId:
           type: integer
           example: 2
+        name:
+          type: string
+          example: "Weekly steps"
+        description:
+          type: string
+        noteId:
+          type: integer
 
     UpdateChartRequest:
       type: object
@@ -1478,6 +1544,12 @@ components:
         activityTypeId:
           type: integer
           example: 5
+        name:
+          type: string
+        description:
+          type: string
+        noteId:
+          type: integer
 
     Chart:
       type: object
@@ -1488,6 +1560,9 @@ components:
         kindId: { type: integer }
         activityTypeId: { type: integer }
         periodId: { type: integer }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        noteId: { type: integer, nullable: true }
         createdAt: { type: string, format: date-time }
         modifiedAt: { type: string, format: date-time }
 

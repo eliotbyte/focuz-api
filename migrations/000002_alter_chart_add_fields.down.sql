@@ -1,0 +1,4 @@
+ALTER TABLE chart
+	DROP COLUMN IF EXISTS note_id,
+	DROP COLUMN IF EXISTS description,
+	DROP COLUMN IF EXISTS name; 

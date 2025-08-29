@@ -16,19 +16,22 @@ func NewChartsRepository(db *sql.DB) *ChartsRepository {
 	return &ChartsRepository{db: db}
 }
 
-func (r *ChartsRepository) CreateChart(userID, spaceID, kindID, activityTypeID, periodID int) (*models.Chart, error) {
+func (r *ChartsRepository) CreateChart(userID, spaceID, kindID, activityTypeID, periodID int, name string, description *string, noteID *int) (*models.Chart, error) {
 	var chart models.Chart
 	err := r.db.QueryRow(`
-		INSERT INTO chart (user_id, space_id, kind, activity_type_id, period, created_at, modified_at)
-		VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
-		RETURNING id, user_id, space_id, kind, activity_type_id, period, created_at, modified_at
-	`, userID, spaceID, kindID, activityTypeID, periodID).Scan(
+		INSERT INTO chart (user_id, space_id, kind, activity_type_id, period, name, description, note_id, created_at, modified_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+		RETURNING id, user_id, space_id, kind, activity_type_id, period, name, description, note_id, created_at, modified_at
+	`, userID, spaceID, kindID, activityTypeID, periodID, name, description, noteID).Scan(
 		&chart.ID,
 		&chart.UserID,
 		&chart.SpaceID,
 		&chart.KindID,
 		&chart.ActivityTypeID,
 		&chart.PeriodID,
+		&chart.Name,
+		&chart.Description,
+		&chart.NoteID,
 		&chart.CreatedAt,
 		&chart.ModifiedAt,
 	)
@@ -41,7 +44,7 @@ func (r *ChartsRepository) CreateChart(userID, spaceID, kindID, activityTypeID, 
 func (r *ChartsRepository) GetChartByID(id int) (*models.Chart, error) {
 	var chart models.Chart
 	err := r.db.QueryRow(`
-		SELECT id, user_id, space_id, kind, activity_type_id, period, is_deleted, created_at, modified_at
+		SELECT id, user_id, space_id, kind, activity_type_id, period, name, description, note_id, is_deleted, created_at, modified_at
 		FROM chart
 		WHERE id = $1
 	`, id).Scan(
@@ -51,6 +54,9 @@ func (r *ChartsRepository) GetChartByID(id int) (*models.Chart, error) {
 		&chart.KindID,
 		&chart.ActivityTypeID,
 		&chart.PeriodID,
+		&chart.Name,
+		&chart.Description,
+		&chart.NoteID,
 		&chart.IsDeleted,
 		&chart.CreatedAt,
 		&chart.ModifiedAt,
@@ -73,12 +79,12 @@ func (r *ChartsRepository) UpdateChartDeleted(id int, isDeleted bool) error {
 	return err
 }
 
-func (r *ChartsRepository) UpdateChart(id int, kindID, activityTypeID, periodID int) error {
+func (r *ChartsRepository) UpdateChart(id int, kindID, activityTypeID, periodID int, name string, description *string, noteID *int) error {
 	_, err := r.db.Exec(`
 		UPDATE chart
-		SET kind = $1, activity_type_id = $2, period = $3, modified_at = NOW()
-		WHERE id = $4
-	`, kindID, activityTypeID, periodID, id)
+		SET kind = $1, activity_type_id = $2, period = $3, name = $4, description = $5, note_id = $6, modified_at = NOW()
+		WHERE id = $7
+	`, kindID, activityTypeID, periodID, name, description, noteID, id)
 	return err
 }
 
@@ -94,7 +100,7 @@ func (r *ChartsRepository) GetCharts(spaceID int, filters models.ChartFilters) (
 	idx++
 
 	query := `
-		SELECT c.id, c.user_id, c.space_id, c.kind, c.activity_type_id, c.period, c.created_at, c.modified_at
+		SELECT c.id, c.user_id, c.space_id, c.kind, c.activity_type_id, c.period, c.name, c.description, c.note_id, c.created_at, c.modified_at
 		FROM chart c
 	`
 
@@ -122,6 +128,9 @@ func (r *ChartsRepository) GetCharts(spaceID int, filters models.ChartFilters) (
 			&chart.KindID,
 			&chart.ActivityTypeID,
 			&chart.PeriodID,
+			&chart.Name,
+			&chart.Description,
+			&chart.NoteID,
 			&chart.CreatedAt,
 			&chart.ModifiedAt,
 		)

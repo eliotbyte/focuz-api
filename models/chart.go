@@ -9,6 +9,9 @@ type Chart struct {
 	KindID         int       `json:"kindId"`
 	ActivityTypeID int       `json:"activityTypeId"`
 	PeriodID       int       `json:"periodId"`
+	Name           string    `json:"name"`
+	Description    *string   `json:"description,omitempty"`
+	NoteID         *int      `json:"noteId,omitempty"`
 	IsDeleted      bool      `json:"-"`
 	CreatedAt      time.Time `json:"createdAt"`
 	ModifiedAt     time.Time `json:"modifiedAt"`
