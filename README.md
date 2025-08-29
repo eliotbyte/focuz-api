@@ -1,6 +1,6 @@
 # Focuz API
 
-Backend API for a note-taking application with workspaces, topics, and activities.
+Backend API for a note-taking application with workspaces, notes, charts, and activities.
 
 ## Quick Start
 
@@ -48,14 +48,6 @@ docker-compose up -d
 - `GET /spaces/{id}/users` - get users in a workspace
 - `POST /spaces/{id}/invite` - invite a user
 - `DELETE /spaces/{id}/users/{userId}` - remove a user from a workspace
-
-### Topics
-- `GET /topic-types` - get topic types
-- `POST /topics` - create a topic
-- `PATCH /topics/{id}` - update a topic
-- `PATCH /topics/{id}/delete` - soft delete a topic
-- `PATCH /topics/{id}/restore` - restore a topic
-- `GET /spaces/{spaceId}/topics` - get topics in a workspace
 
 ### Notes
 - `GET /notes` - get notes

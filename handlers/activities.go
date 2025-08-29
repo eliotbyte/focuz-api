@@ -17,7 +17,6 @@ import (
 type ActivitiesHandler struct {
 	activitiesRepo    *repository.ActivitiesRepository
 	spacesRepo        *repository.SpacesRepository
-	topicsRepo        *repository.TopicsRepository
 	notesRepo         *repository.NotesRepository
 	activityTypesRepo *repository.ActivityTypesRepository
 }
@@ -25,14 +24,12 @@ type ActivitiesHandler struct {
 func NewActivitiesHandler(
 	ar *repository.ActivitiesRepository,
 	sr *repository.SpacesRepository,
-	tr *repository.TopicsRepository,
 	nr *repository.NotesRepository,
 	atr *repository.ActivityTypesRepository,
 ) *ActivitiesHandler {
 	return &ActivitiesHandler{
 		activitiesRepo:    ar,
 		spacesRepo:        sr,
-		topicsRepo:        tr,
 		notesRepo:         nr,
 		activityTypesRepo: atr,
 	}
@@ -66,12 +63,7 @@ func (h *ActivitiesHandler) CreateActivity(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeInvalidRequest, "Invalid note"))
 			return
 		}
-		topic, terr := h.topicsRepo.GetTopicByID(note.TopicID)
-		if terr != nil || topic == nil || topic.IsDeleted {
-			c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeInvalidRequest, "Invalid topic"))
-			return
-		}
-		spaceID = topic.SpaceID
+		spaceID = note.SpaceID
 	} else {
 		// If no note is specified, get space ID from activity type
 		spaceID = activityType.SpaceID
@@ -255,11 +247,7 @@ func (h *ActivitiesHandler) getSpaceIDForActivity(activity *models.Activity) (in
 	if err != nil || note == nil || note.IsDeleted {
 		return 0, errors.New("invalid note")
 	}
-	topic, err := h.topicsRepo.GetTopicByID(note.TopicID)
-	if err != nil || topic == nil || topic.IsDeleted {
-		return 0, errors.New("invalid topic")
-	}
-	return topic.SpaceID, nil
+	return note.SpaceID, nil
 }
 
 func (h *ActivitiesHandler) validateActivityValue(t *models.ActivityType, raw string) ([]byte, error) {
@@ -365,14 +353,6 @@ func (h *ActivitiesHandler) GetActivitiesAnalysis(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeInvalidRequest, "Invalid activity type"))
 		return
 	}
-	topicIDStr := c.Query("topicId")
-	var topicID *int
-	if topicIDStr != "" {
-		tmp, e2 := strconv.Atoi(topicIDStr)
-		if e2 == nil {
-			topicID = &tmp
-		}
-	}
 	startDateStr := c.Query("startDate")
 	var startDate *time.Time
 	if startDateStr != "" {
@@ -399,7 +379,6 @@ func (h *ActivitiesHandler) GetActivitiesAnalysis(c *gin.Context) {
 
 	results, err := h.activitiesRepo.GetActivitiesAnalysis(
 		spaceID,
-		topicID,
 		startDate,
 		endDate,
 		tags,

@@ -39,7 +39,7 @@ func (s *E2ETestSuite) Test39_UploadFile() {
 		"tags":     []string{"upload", "test"},
 		"parentId": nil,
 		"date":     time.Now().Format(time.RFC3339),
-		"topicId":  s.createdTopicID,
+		"spaceId":  s.createdSpaceID,
 	}
 	jsonBody, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequest("POST", s.baseURL+"/notes", bytes.NewBuffer(jsonBody))
@@ -103,7 +103,7 @@ func (s *E2ETestSuite) Test41_UploadAndGetFile() {
 		"tags":     []string{"upload", "get", "test"},
 		"parentId": nil,
 		"date":     time.Now().Format(time.RFC3339),
-		"topicId":  s.createdTopicID,
+		"spaceId":  s.createdSpaceID,
 	}
 	jsonBody, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequest("POST", s.baseURL+"/notes", bytes.NewBuffer(jsonBody))
@@ -179,7 +179,7 @@ func (s *E2ETestSuite) Test39B_UploadFile_MimeDetectionOverridesHeader() {
 		"tags":     []string{"upload", "detect"},
 		"parentId": nil,
 		"date":     time.Now().Format(time.RFC3339),
-		"topicId":  s.createdTopicID,
+		"spaceId":  s.createdSpaceID,
 	}
 	jsonBody, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequest("POST", s.baseURL+"/notes", bytes.NewBuffer(jsonBody))
@@ -237,7 +237,7 @@ func (s *E2ETestSuite) Test39C_UploadFile_DisallowedGifDespiteHeaderPng() {
 		"tags":     []string{"upload", "gif"},
 		"parentId": nil,
 		"date":     time.Now().Format(time.RFC3339),
-		"topicId":  s.createdTopicID,
+		"spaceId":  s.createdSpaceID,
 	}
 	jsonBody, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequest("POST", s.baseURL+"/notes", bytes.NewBuffer(jsonBody))
@@ -287,7 +287,7 @@ func (s *E2ETestSuite) Test39D_UploadFile_TooLargeReturns413() {
 		"tags":     []string{"upload", "large"},
 		"parentId": nil,
 		"date":     time.Now().Format(time.RFC3339),
-		"topicId":  s.createdTopicID,
+		"spaceId":  s.createdSpaceID,
 	}
 	jsonBody, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequest("POST", s.baseURL+"/notes", bytes.NewBuffer(jsonBody))

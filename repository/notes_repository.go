@@ -55,19 +55,12 @@ func (r *NotesRepository) GetUserByUsername(username string) (*models.User, erro
 	return &user, nil
 }
 
-func (r *NotesRepository) CreateNote(userID int, text string, tags []string, parentID *int, date *string, topicID int) (*models.Note, error) {
+func (r *NotesRepository) CreateNote(userID int, text string, tags []string, parentID *int, date *string, spaceID int) (*models.Note, error) {
 	tx, err := r.db.Begin()
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
-
-	// Get space_id for the topic
-	var spaceID int
-	err = tx.QueryRow("SELECT space_id FROM topic WHERE id = $1", topicID).Scan(&spaceID)
-	if err != nil {
-		return nil, err
-	}
 
 	var noteDate time.Time
 	if date != nil {
@@ -83,10 +76,10 @@ func (r *NotesRepository) CreateNote(userID int, text string, tags []string, par
 
 	var noteID int
 	err = tx.QueryRow(`
-		INSERT INTO note (user_id, text, created_at, modified_at, date, parent_id, topic_id)
+		INSERT INTO note (user_id, text, created_at, modified_at, date, parent_id, space_id)
 		VALUES ($1, $2, NOW(), NOW(), $3, $4, $5)
 		RETURNING id
-	`, userID, text, noteDate, parentID, topicID).Scan(&noteID)
+	`, userID, text, noteDate, parentID, spaceID).Scan(&noteID)
 	if err != nil {
 		return nil, err
 	}
@@ -114,12 +107,12 @@ func (r *NotesRepository) CreateNote(userID int, text string, tags []string, par
 				return nil, err
 			}
 
-			// Create tag_to_space_topic entry
+			// Create tag_to_space entry
 			_, err = tx.Exec(`
-				INSERT INTO tag_to_space_topic (tag_id, space_id, topic_id)
-				VALUES ($1, $2, $3)
-				ON CONFLICT (tag_id, space_id, topic_id) DO NOTHING
-			`, tagID, spaceID, topicID)
+				INSERT INTO tag_to_space (tag_id, space_id)
+				VALUES ($1, $2)
+				ON CONFLICT (tag_id, space_id) DO NOTHING
+			`, tagID, spaceID)
 			if err != nil {
 				return nil, err
 			}
@@ -186,7 +179,7 @@ func (r *NotesRepository) GetNoteByID(id int) (*models.Note, error) {
 	var parentText sql.NullString
 	err := r.db.QueryRow(`
 		SELECT n.id, n.user_id, n.text, n.created_at, n.modified_at, n.date,
-		       n.parent_id, n.reply_count, n.is_deleted, n.topic_id,
+		       n.parent_id, n.reply_count, n.is_deleted, n.space_id,
 		       p.text AS parent_text
 		FROM note n
 		LEFT JOIN note p ON n.parent_id = p.id
@@ -201,7 +194,7 @@ func (r *NotesRepository) GetNoteByID(id int) (*models.Note, error) {
 		&parentID,
 		&note.ReplyCount,
 		&note.IsDeleted,
-		&note.TopicID,
+		&note.SpaceID,
 		&parentText,
 	)
 	if err == sql.ErrNoRows {
@@ -263,20 +256,15 @@ func (r *NotesRepository) GetNoteByID(id int) (*models.Note, error) {
 	return &note, nil
 }
 
-func (r *NotesRepository) GetNotes(userID, spaceID int, topicID *int, filters models.NoteFilters) ([]*models.Note, int, error) {
+func (r *NotesRepository) GetNotes(userID, spaceID int, filters models.NoteFilters) ([]*models.Note, int, error) {
 	offset := (filters.Page - 1) * filters.PageSize
 	var conditions []string
 	var params []interface{}
 	idx := 1
 	conditions = append(conditions, "n.is_deleted = FALSE")
-	conditions = append(conditions, "t.space_id = $"+strconv.Itoa(idx))
+	conditions = append(conditions, "n.space_id = $"+strconv.Itoa(idx))
 	params = append(params, spaceID)
 	idx++
-	if topicID != nil {
-		conditions = append(conditions, "n.topic_id = $"+strconv.Itoa(idx))
-		params = append(params, *topicID)
-		idx++
-	}
 	if filters.ParentID != nil {
 		conditions = append(conditions, "n.parent_id = $"+strconv.Itoa(idx))
 		params = append(params, *filters.ParentID)
@@ -305,7 +293,7 @@ func (r *NotesRepository) GetNotes(userID, spaceID int, topicID *int, filters mo
 	query := `
 		SELECT 
 		  n.id, n.user_id, n.text, n.created_at, n.modified_at, n.date,
-		  n.parent_id, p.text AS parent_text, n.reply_count, n.is_deleted, n.topic_id,
+		  n.parent_id, p.text AS parent_text, n.reply_count, n.is_deleted, n.space_id,
 		  COALESCE((SELECT ARRAY_AGG(DISTINCT t2.name)
 		           FROM tag t2 JOIN note_to_tag nt2 ON nt2.tag_id = t2.id
 		           WHERE nt2.note_id = n.id), ARRAY[]::text[]) AS tags,
@@ -329,7 +317,6 @@ func (r *NotesRepository) GetNotes(userID, spaceID int, topicID *int, filters mo
 		    FROM attachments att WHERE att.note_id = n.id
 		  ), '[]'::json) AS attachments
 		FROM note n
-		INNER JOIN topic t ON n.topic_id = t.id
 		LEFT JOIN note p ON n.parent_id = p.id
 	`
 
@@ -406,7 +393,7 @@ func (r *NotesRepository) GetNotes(userID, spaceID int, topicID *int, filters mo
 			&parentText,
 			&note.ReplyCount,
 			&note.IsDeleted,
-			&note.TopicID,
+			&note.SpaceID,
 			&tags,
 			&activitiesJSON,
 			&attachmentsJSON,
@@ -449,7 +436,6 @@ func (r *NotesRepository) GetNotes(userID, spaceID int, topicID *int, filters mo
 	countQuery := `
 		SELECT COUNT(n.id)
 		FROM note n
-		INNER JOIN topic t ON n.topic_id = t.id
 	`
 	if len(conditions) > 0 {
 		countQuery += " WHERE " + joinConditions(conditions, " AND ")
@@ -511,27 +497,18 @@ type TagAutocomplete struct {
 	Name string `json:"name"`
 }
 
-func (r *NotesRepository) GetTagAutocomplete(text string, spaceID int, topicID *int) ([]TagAutocomplete, error) {
+func (r *NotesRepository) GetTagAutocomplete(text string, spaceID int) ([]TagAutocomplete, error) {
 	query := `
-		WITH ranked_tags AS (
-			SELECT 
-				t.id,
-				t.name,
-				CASE 
-					WHEN tst.topic_id = $3 THEN 0
-					ELSE 1
-				END as rank
-			FROM tag t
-			JOIN tag_to_space_topic tst ON t.id = tst.tag_id
-			WHERE tst.space_id = $1
-			AND ($2 = '' OR t.name ILIKE $2 || '%')
-		)
-		SELECT id, name
-		FROM ranked_tags
-		ORDER BY rank, name
+		SELECT DISTINCT t.id, t.name
+		FROM tag t
+		JOIN note_to_tag nt ON t.id = nt.tag_id
+		JOIN note n ON nt.note_id = n.id
+		WHERE n.space_id = $1
+		AND ($2 = '' OR t.name ILIKE $2 || '%')
+		ORDER BY t.name
 		LIMIT 10
 	`
-	rows, err := r.db.Query(query, spaceID, text, topicID)
+	rows, err := r.db.Query(query, spaceID, text)
 	if err != nil {
 		return nil, err
 	}

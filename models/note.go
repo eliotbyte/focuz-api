@@ -13,7 +13,7 @@ type Note struct {
 	Parent      *ParentNote    `json:"parent"`
 	ReplyCount  int            `json:"replyCount"`
 	IsDeleted   bool           `json:"-"`
-	TopicID     int            `json:"topicId"`
+	SpaceID     int            `json:"spaceId"`
 	Activities  []NoteActivity `json:"activities"`
 	Attachments []Attachment   `json:"attachments"`
 }

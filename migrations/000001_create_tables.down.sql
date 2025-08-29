@@ -1,14 +1,14 @@
 DROP TABLE IF EXISTS activities;
 DROP TABLE IF EXISTS note_to_tag;
-DROP TABLE IF EXISTS tag_to_space_topic;
+DROP TABLE IF EXISTS attachments;
 DROP TABLE IF EXISTS note;
+DROP TABLE IF EXISTS tag_to_space;
 DROP TABLE IF EXISTS tag;
-DROP TABLE IF EXISTS topic;
-DROP TABLE IF EXISTS topic_type;
+DROP TABLE IF EXISTS notifications;
+
 DROP TABLE IF EXISTS user_to_space;
 DROP TABLE IF EXISTS activity_types;
 DROP TABLE IF EXISTS activity_type_category;
 DROP TABLE IF EXISTS space;
 DROP TABLE IF EXISTS role;
 DROP TABLE IF EXISTS users;
-DROP TABLE IF EXISTS attachments;

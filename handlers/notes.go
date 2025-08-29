@@ -24,11 +24,10 @@ import (
 type NotesHandler struct {
 	repo       *repository.NotesRepository
 	spacesRepo *repository.SpacesRepository
-	topicsRepo *repository.TopicsRepository
 }
 
-func NewNotesHandler(repo *repository.NotesRepository, spacesRepo *repository.SpacesRepository, topicsRepo *repository.TopicsRepository) *NotesHandler {
-	return &NotesHandler{repo: repo, spacesRepo: spacesRepo, topicsRepo: topicsRepo}
+func NewNotesHandler(repo *repository.NotesRepository, spacesRepo *repository.SpacesRepository) *NotesHandler {
+	return &NotesHandler{repo: repo, spacesRepo: spacesRepo}
 }
 
 func AuthMiddleware(secret string) gin.HandlerFunc {
@@ -154,7 +153,7 @@ func (h *NotesHandler) CreateNote(c *gin.Context) {
 	var req struct {
 		Text     string    `json:"text" binding:"required"`
 		Date     time.Time `json:"date" binding:"required"`
-		TopicID  int       `json:"topicId" binding:"required"`
+		SpaceID  int       `json:"spaceId" binding:"required"`
 		Tags     []string  `json:"tags"`
 		ParentID *int      `json:"parentId"`
 	}
@@ -163,14 +162,8 @@ func (h *NotesHandler) CreateNote(c *gin.Context) {
 		return
 	}
 
-	topic, err := h.topicsRepo.GetTopicByID(req.TopicID)
-	if err != nil || topic == nil || topic.IsDeleted {
-		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeInvalidRequest, "Invalid topic"))
-		return
-	}
-
 	userID := c.GetInt("userId")
-	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, topic.SpaceID)
+	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, req.SpaceID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
@@ -180,20 +173,8 @@ func (h *NotesHandler) CreateNote(c *gin.Context) {
 		return
 	}
 
-	topicType := types.GetTopicTypeByID(topic.TypeID)
-	if topicType == nil {
-		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeInvalidRequest, "Invalid topic type"))
-		return
-	}
-
-	// Guests can only create notes in notebook topics
-	if roleID != globals.DefaultOwnerRoleID && topicType.Name != "notebook" {
-		c.JSON(http.StatusForbidden, types.NewErrorResponse(types.ErrorCodeForbidden, "Guests can only create notes in notebook topics"))
-		return
-	}
-
 	dateStr := req.Date.Format(time.RFC3339)
-	note, err := h.repo.CreateNote(userID, req.Text, req.Tags, req.ParentID, &dateStr, req.TopicID)
+	note, err := h.repo.CreateNote(userID, req.Text, req.Tags, req.ParentID, &dateStr, req.SpaceID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
@@ -218,12 +199,7 @@ func (h *NotesHandler) DeleteNote(c *gin.Context) {
 		return
 	}
 	userID := c.GetInt("userId")
-	topic, err := h.topicsRepo.GetTopicByID(note.TopicID)
-	if err != nil || topic == nil {
-		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeInvalidRequest, "Topic error"))
-		return
-	}
-	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, topic.SpaceID)
+	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, note.SpaceID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
@@ -259,12 +235,7 @@ func (h *NotesHandler) RestoreNote(c *gin.Context) {
 		return
 	}
 	userID := c.GetInt("userId")
-	topic, err := h.topicsRepo.GetTopicByID(note.TopicID)
-	if err != nil || topic == nil {
-		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeInvalidRequest, "Topic error"))
-		return
-	}
-	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, topic.SpaceID)
+	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, note.SpaceID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
@@ -300,12 +271,7 @@ func (h *NotesHandler) GetNote(c *gin.Context) {
 		return
 	}
 	userID := c.GetInt("userId")
-	topic, err := h.topicsRepo.GetTopicByID(note.TopicID)
-	if err != nil || topic == nil {
-		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeInvalidRequest, "Topic error"))
-		return
-	}
-	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, topic.SpaceID)
+	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, note.SpaceID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
@@ -347,14 +313,6 @@ func (h *NotesHandler) GetNotes(c *gin.Context) {
 	// Use standardized pagination
 	pagination := types.ParsePaginationParams(c)
 
-	topicIDParam := c.Query("topicId")
-	var topicID *int
-	if topicIDParam != "" {
-		tmp, err := strconv.Atoi(topicIDParam)
-		if err == nil {
-			topicID = &tmp
-		}
-	}
 	tags := c.QueryArray("tags")
 	notReplyParam := c.Query("notReply")
 	notReply := false
@@ -424,7 +382,7 @@ func (h *NotesHandler) GetNotes(c *gin.Context) {
 		DateFrom:    dateFrom,
 		DateTo:      dateTo,
 	}
-	notes, total, err := h.repo.GetNotes(userID, spaceID, topicID, filters)
+	notes, total, err := h.repo.GetNotes(userID, spaceID, filters)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
@@ -454,15 +412,7 @@ func (h *NotesHandler) GetTagAutocomplete(c *gin.Context) {
 		return
 	}
 
-	var topicID *int
-	if topicIDStr := c.Query("topicId"); topicIDStr != "" {
-		tmp, err := strconv.Atoi(topicIDStr)
-		if err == nil {
-			topicID = &tmp
-		}
-	}
-
-	tags, err := h.repo.GetTagAutocomplete(text, spaceID, topicID)
+	tags, err := h.repo.GetTagAutocomplete(text, spaceID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return

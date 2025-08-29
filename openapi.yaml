@@ -1,7 +1,7 @@
 openapi: 3.0.0
 info:
   title: Focuz API
-  description: API for a note-taking application with workspaces, topics, and activities
+  description: API for a note-taking application with workspaces, notes, charts, and activities
   version: 1.0.0
   contact:
     name: Focuz Team
@@ -377,146 +377,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/APIResponse'
 
-  /topics:
-    post:
-      summary: Create a topic
-      tags:
-        - Topics
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateTopicRequest'
-      responses:
-        '201':
-          description: Topic created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/APIResponse'
-
-  /topics/{id}:
-    patch:
-      summary: Update a topic
-      tags:
-        - Topics
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpdateTopicRequest'
-      responses:
-        '200':
-          description: Topic updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/APIResponse'
-
-  /topics/{id}/delete:
-    patch:
-      summary: Delete a topic (soft delete)
-      tags:
-        - Topics
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        '200':
-          description: Topic deleted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/APIResponse'
-
-  /topics/{id}/restore:
-    patch:
-      summary: Restore a topic
-      tags:
-        - Topics
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        '200':
-          description: Topic restored
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/APIResponse'
-
-  /spaces/{spaceId}/topics:
-    get:
-      summary: Get topics in a workspace
-      tags:
-        - Topics
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: spaceId
-          in: path
-          required: true
-          schema:
-            type: integer
-        - name: page
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            default: 1
-          example: 1
-        - name: pageSize
-          in: query
-          schema:
-            type: integer
-            enum: [10, 20, 50, 100]
-            default: 20
-          example: 20
-      responses:
-        '200':
-          description: List of topics
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaginatedResponse'
-
-  /topic-types:
-    get:
-      summary: Get topic types
-      tags:
-        - Topics
-      security:
-        - BearerAuth: []
-      responses:
-        '200':
-          description: List of topic types
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/APIResponse'
-
   /notes:
     get:
       summary: Get notes
@@ -528,10 +388,6 @@ paths:
         - name: spaceId
           in: query
           required: true
-          schema:
-            type: integer
-        - name: topicId
-          in: query
           schema:
             type: integer
         - name: search
@@ -566,7 +422,7 @@ paths:
           in: query
           schema:
             type: string
-          description: Sort field and order (format: field,order). Fields: createdat, modifiedat. Orders: ASC, DESC
+          description: "Sort field and order (format: field,order). Fields: createdat, modifiedat. Orders: ASC, DESC"
           example: 'createdat,DESC'
         - name: notReply
           in: query
@@ -625,7 +481,16 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateNoteRequest'
+              type: object
+              required: [text, date, spaceId]
+              properties:
+                text: { type: string }
+                date: { type: string, format: date-time }
+                spaceId: { type: integer }
+                tags:
+                  type: array
+                  items: { type: string }
+                parentId: { type: integer, nullable: true }
       responses:
         '201':
           description: Note created
@@ -746,10 +611,7 @@ paths:
             type: integer
             enum: [1, 2, 3, 4]
           description: 1=day, 2=week, 3=month, 4=year
-        - name: topicId
-          in: query
-          schema:
-            type: integer
+        
         - name: startDate
           in: query
           schema:
@@ -1009,10 +871,6 @@ paths:
           required: true
           schema:
             type: integer
-        - name: topicId
-          in: query
-          schema:
-            type: integer
         - name: page
           in: query
           schema:
@@ -1059,7 +917,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateChartRequest'
+              type: object
+              required: [spaceId, kindId, activityTypeId, periodId]
+              properties:
+                spaceId: { type: integer }
+                kindId: { type: integer }
+                activityTypeId: { type: integer }
+                periodId: { type: integer }
       responses:
         '201':
           description: Chart created
@@ -1315,7 +1179,7 @@ components:
                     $ref: '#/components/schemas/Space'
                 - type: array
                   items:
-                    $ref: '#/components/schemas/Topic'
+                    $ref: '#/components/schemas/Note'
                 - type: array
                   items:
                     $ref: '#/components/schemas/Note'
@@ -1377,15 +1241,7 @@ components:
         createdAt: { type: string, format: date-time }
         modifiedAt: { type: string, format: date-time }
 
-    Topic:
-      type: object
-      properties:
-        id: { type: integer }
-        spaceId: { type: integer }
-        name: { type: string }
-        typeId: { type: integer }
-        createdAt: { type: string, format: date-time }
-        modifiedAt: { type: string, format: date-time }
+    
 
     Note:
       type: object
@@ -1393,6 +1249,7 @@ components:
         id: { type: integer }
         userId: { type: integer }
         text: { type: string }
+        spaceId: { type: integer }
         tags:
           type: array
           items: { type: string }
@@ -1406,7 +1263,6 @@ components:
             id: { type: integer }
             text: { type: string }
         replyCount: { type: integer }
-        topicId: { type: integer }
         activities:
           type: array
           items:
@@ -1415,7 +1271,7 @@ components:
               id: { type: integer }
               typeId: { type: integer }
               value: { type: string }
-              unit: { type: string, nullable: true }
+              unit: { type: string }
         attachments:
           type: array
           items:
@@ -1429,11 +1285,11 @@ components:
 
     CreateNoteRequest:
       type: object
-      required: [text, date, topicId]
+      required: [text, date, spaceId]
       properties:
         text: { type: string }
         date: { type: string, format: date-time }
-        topicId: { type: integer }
+        spaceId: { type: integer }
         tags:
           type: array
           items: { type: string }
@@ -1443,12 +1299,12 @@ components:
     CreateChartRequest:
       type: object
       required:
-        - topicId
+        - spaceId
         - kindId
         - activityTypeId
         - periodId
       properties:
-        topicId:
+        spaceId:
           type: integer
           example: 1
         kindId:
@@ -1479,7 +1335,7 @@ components:
       properties:
         id: { type: integer }
         userId: { type: integer }
-        topicId: { type: integer }
+        spaceId: { type: integer }
         kindId: { type: integer }
         activityTypeId: { type: integer }
         periodId: { type: integer }

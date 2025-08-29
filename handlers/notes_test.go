@@ -15,7 +15,7 @@ func (s *E2ETestSuite) Test23_CreateNote() {
 		"tags":     []string{"personal", "important"},
 		"parentId": nil,
 		"date":     time.Now().Format(time.RFC3339),
-		"topicId":  s.createdTopicID,
+		"spaceId":  s.createdSpaceID,
 	}
 	jsonBody, _ := json.Marshal(reqBody)
 
@@ -45,7 +45,7 @@ func (s *E2ETestSuite) Test24_CreateNoteReply() {
 		"tags":     []string{"reply"},
 		"parentId": s.createdNoteID,
 		"date":     time.Now().Format(time.RFC3339),
-		"topicId":  s.createdTopicID,
+		"spaceId":  s.createdSpaceID,
 	}
 	jsonBody, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequest("POST", s.baseURL+"/notes", bytes.NewBuffer(jsonBody))
@@ -58,7 +58,7 @@ func (s *E2ETestSuite) Test24_CreateNoteReply() {
 	s.Equal(http.StatusCreated, resp.StatusCode)
 }
 
-func (s *E2ETestSuite) Test25_CreateNoteAsGuestInNotebook() {
+func (s *E2ETestSuite) Test25_CreateNoteAsGuest() {
 	// Re-invite guest to the space since they might have been removed in previous tests
 	reqBody := map[string]string{"username": "guest"}
 	jsonBody, _ := json.Marshal(reqBody)
@@ -76,7 +76,7 @@ func (s *E2ETestSuite) Test25_CreateNoteAsGuestInNotebook() {
 		"text":    "Guest notebook note",
 		"tags":    []string{"guest", "notebook"},
 		"date":    time.Now().Format(time.RFC3339),
-		"topicId": s.createdTopicID,
+		"spaceId": s.createdSpaceID,
 	}
 	jsonBody2, _ := json.Marshal(reqBody2)
 	req2, _ := http.NewRequest("POST", s.baseURL+"/notes", bytes.NewBuffer(jsonBody2))
@@ -105,38 +105,6 @@ func (s *E2ETestSuite) Test25_CreateNoteAsGuestInNotebook() {
 	s.Equal(http.StatusCreated, resp3.StatusCode)
 }
 
-func (s *E2ETestSuite) Test26_CreateNoteAsGuestInDashboard() {
-	// Re-invite guest to the space since they might have been removed in previous tests
-	reqBody := map[string]string{"username": "guest"}
-	jsonBody, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", s.baseURL+"/spaces/"+strconv.Itoa(s.createdSpaceID)+"/invite", bytes.NewBuffer(jsonBody))
-	req.Header.Set("Authorization", "Bearer "+s.ownerToken)
-	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	s.NoError(err)
-	defer resp.Body.Close()
-	s.Equal(http.StatusOK, resp.StatusCode)
-
-	// Create dashboard topic
-	dashboardTopic := s.createTopic("My Dashboard", 2)
-	reqBody2 := map[string]interface{}{
-		"text":    "Guest dashboard note",
-		"tags":    []string{"guest", "dashboard"},
-		"date":    time.Now().Format(time.RFC3339),
-		"topicId": dashboardTopic,
-	}
-	jsonBody2, _ := json.Marshal(reqBody2)
-	req2, _ := http.NewRequest("POST", s.baseURL+"/notes", bytes.NewBuffer(jsonBody2))
-	req2.Header.Set("Authorization", "Bearer "+s.guestToken)
-	req2.Header.Set("Content-Type", "application/json")
-	client2 := &http.Client{}
-	resp2, err2 := client2.Do(req2)
-	s.NoError(err2)
-	defer resp2.Body.Close()
-	s.Equal(http.StatusForbidden, resp2.StatusCode)
-}
-
 func (s *E2ETestSuite) Test26B_DeclineInvitationPreventsAccess() {
 	// Re-invite guest
 	reqBody := map[string]string{"username": "guest"}
@@ -162,7 +130,7 @@ func (s *E2ETestSuite) Test26B_DeclineInvitationPreventsAccess() {
 		"text":    "should fail",
 		"tags":    []string{"guest"},
 		"date":    time.Now().Format(time.RFC3339),
-		"topicId": s.createdTopicID,
+		"spaceId": s.createdSpaceID,
 	}
 	bn, _ := json.Marshal(reqNote)
 	reqN, _ := http.NewRequest("POST", s.baseURL+"/notes", bytes.NewBuffer(bn))
@@ -178,7 +146,7 @@ func (s *E2ETestSuite) Test27_EditNote() {
 	reqBody := map[string]interface{}{
 		"text":    "Edited note text",
 		"tags":    []string{"important"},
-		"topicId": s.createdTopicID,
+		"spaceId": s.createdSpaceID,
 	}
 	jsonBody, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequest("PATCH", s.baseURL+"/notes/"+strconv.Itoa(s.createdNoteID), bytes.NewBuffer(jsonBody))
@@ -188,6 +156,7 @@ func (s *E2ETestSuite) Test27_EditNote() {
 	resp, err := client.Do(req)
 	s.NoError(err)
 	defer resp.Body.Close()
+	// Endpoint may not exist; ensure it's 404 as before
 	s.Equal(http.StatusNotFound, resp.StatusCode)
 }
 
@@ -304,14 +273,13 @@ func (s *E2ETestSuite) Test37_GetNotesWithComplexFilters() {
 }
 
 func (s *E2ETestSuite) Test65_TagFiltering_StrictIncludeAndExclude() {
-	// Ensure guest present (reuse space and topic created earlier in suite)
 	// Create notes with controlled tags
 	create := func(text string, tags []string) int {
 		reqBody := map[string]interface{}{
 			"text":    text,
 			"tags":    tags,
 			"date":    time.Now().Format(time.RFC3339),
-			"topicId": s.createdTopicID,
+			"spaceId": s.createdSpaceID,
 		}
 		b, _ := json.Marshal(reqBody)
 		req, _ := http.NewRequest("POST", s.baseURL+"/notes", bytes.NewBuffer(b))
@@ -327,14 +295,10 @@ func (s *E2ETestSuite) Test65_TagFiltering_StrictIncludeAndExclude() {
 		return int(data["id"].(float64))
 	}
 
-	idA := create("note A", []string{"task", "code"})
-	_ = idA
-	idB := create("note B", []string{"task", "code", "archive"})
-	_ = idB
-	idC := create("note C", []string{"task"})
-	_ = idC
-	idD := create("note D", []string{"code", "draft"})
-	_ = idD
+	_ = create("note A", []string{"task", "code"})
+	_ = create("note B", []string{"task", "code", "archive"})
+	_ = create("note C", []string{"task"})
+	_ = create("note D", []string{"code", "draft"})
 
 	// Helper to GET and unpack notes list
 	getNotes := func(query string) []map[string]interface{} {

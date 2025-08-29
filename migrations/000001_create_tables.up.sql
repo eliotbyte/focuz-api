@@ -30,33 +30,17 @@ CREATE TABLE user_to_space (
     UNIQUE (user_id, space_id)
 );
 
-CREATE TABLE topic_type (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(50) NOT NULL UNIQUE
-);
-
-CREATE TABLE topic (
-    id SERIAL PRIMARY KEY,
-    space_id INTEGER NOT NULL REFERENCES space(id),
-    name VARCHAR(255) NOT NULL,
-    type_id INTEGER NOT NULL REFERENCES topic_type(id),
-    is_deleted BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    modified_at TIMESTAMP NOT NULL DEFAULT NOW()
-);
-
 CREATE TABLE tag (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) UNIQUE NOT NULL
 );
 
-CREATE TABLE tag_to_space_topic (
+CREATE TABLE tag_to_space (
     id SERIAL PRIMARY KEY,
     tag_id INTEGER NOT NULL REFERENCES tag(id),
     space_id INTEGER NOT NULL REFERENCES space(id),
-    topic_id INTEGER REFERENCES topic(id),
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    UNIQUE (tag_id, space_id, topic_id)
+    UNIQUE (tag_id, space_id)
 );
 
 CREATE TABLE note (
@@ -69,7 +53,7 @@ CREATE TABLE note (
     parent_id INTEGER REFERENCES note(id),
     reply_count INTEGER DEFAULT 0,
     is_deleted BOOLEAN DEFAULT FALSE,
-    topic_id INTEGER REFERENCES topic(id)
+    space_id INTEGER NOT NULL REFERENCES space(id)
 );
 
 CREATE INDEX pgroonga_note_text_index ON note USING pgroonga (text);
@@ -127,7 +111,7 @@ CREATE TABLE attachments (
 CREATE TABLE chart (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL REFERENCES users(id),
-    topic_id INTEGER NOT NULL REFERENCES topic(id),
+    space_id INTEGER NOT NULL REFERENCES space(id),
     kind INTEGER NOT NULL,
     activity_type_id INTEGER NOT NULL REFERENCES activity_types(id),
     period INTEGER NOT NULL,
@@ -149,14 +133,9 @@ CREATE TABLE notifications (
 );
 CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, is_read, created_at DESC);
 
--- Insert dashboard topic type
-INSERT INTO topic_type (name) VALUES ('dashboard') ON CONFLICT (name) DO NOTHING;
-
 -- Performance indexes
-CREATE INDEX IF NOT EXISTS idx_note_topic_id ON note(topic_id);
 CREATE INDEX IF NOT EXISTS idx_note_date ON note(date);
 CREATE INDEX IF NOT EXISTS idx_note_created_at ON note(created_at);
-CREATE INDEX IF NOT EXISTS idx_topic_space_id ON topic(space_id);
 CREATE INDEX IF NOT EXISTS idx_user_to_space_user_space ON user_to_space(user_id, space_id);
 CREATE INDEX IF NOT EXISTS idx_attachments_note_id ON attachments(note_id);
 CREATE INDEX IF NOT EXISTS idx_activities_note_id ON activities(note_id);

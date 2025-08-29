@@ -1,9 +1,6 @@
 package handlers
 
 import (
-	"bytes"
-	"encoding/json"
-	"net/http"
 	"os"
 	"testing"
 
@@ -16,7 +13,6 @@ type E2ETestSuite struct {
 	ownerToken     string
 	guestToken     string
 	createdSpaceID int
-	createdTopicID int
 	createdNoteID  int
 }
 
@@ -27,30 +23,6 @@ func (s *E2ETestSuite) SetupSuite() {
 	} else {
 		s.baseURL = "http://localhost:8080"
 	}
-}
-
-func (s *E2ETestSuite) createTopic(name string, typeID int) int {
-	reqBody := map[string]interface{}{
-		"spaceId": s.createdSpaceID,
-		"name":    name,
-		"typeId":  typeID,
-	}
-	jsonBody, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", s.baseURL+"/topics", bytes.NewBuffer(jsonBody))
-	req.Header.Set("Authorization", "Bearer "+s.ownerToken)
-	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	s.NoError(err)
-	defer resp.Body.Close()
-	s.Equal(http.StatusCreated, resp.StatusCode)
-	var topicResp map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&topicResp)
-	if topicResp["success"] != nil && topicResp["success"].(bool) {
-		topicData := topicResp["data"].(map[string]interface{})
-		return int(topicData["id"].(float64))
-	}
-	return 0
 }
 
 func TestE2ETestSuite(t *testing.T) {

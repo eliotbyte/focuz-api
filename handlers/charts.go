@@ -13,20 +13,17 @@ import (
 type ChartsHandler struct {
 	chartsRepo        *repository.ChartsRepository
 	spacesRepo        *repository.SpacesRepository
-	topicsRepo        *repository.TopicsRepository
 	activityTypesRepo *repository.ActivityTypesRepository
 }
 
 func NewChartsHandler(
 	cr *repository.ChartsRepository,
 	sr *repository.SpacesRepository,
-	tr *repository.TopicsRepository,
 	atr *repository.ActivityTypesRepository,
 ) *ChartsHandler {
 	return &ChartsHandler{
 		chartsRepo:        cr,
 		spacesRepo:        sr,
-		topicsRepo:        tr,
 		activityTypesRepo: atr,
 	}
 }
@@ -41,7 +38,7 @@ func (h *ChartsHandler) GetPeriodTypes(c *gin.Context) {
 
 func (h *ChartsHandler) CreateChart(c *gin.Context) {
 	var req struct {
-		TopicID        int `json:"topicId" binding:"required"`
+		SpaceID        int `json:"spaceId" binding:"required"`
 		KindID         int `json:"kindId" binding:"required"`
 		ActivityTypeID int `json:"activityTypeId" binding:"required"`
 		PeriodID       int `json:"periodId" binding:"required"`
@@ -64,19 +61,7 @@ func (h *ChartsHandler) CreateChart(c *gin.Context) {
 	}
 
 	userID := c.GetInt("userId")
-	topic, err := h.topicsRepo.GetTopicByID(req.TopicID)
-	if err != nil || topic == nil || topic.IsDeleted {
-		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeInvalidRequest, "Invalid topic"))
-		return
-	}
-
-	topicType := types.GetTopicTypeByID(topic.TypeID)
-	if topicType == nil || topicType.Name != "dashboard" {
-		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeInvalidRequest, "Charts can only be created in dashboard topics"))
-		return
-	}
-
-	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, topic.SpaceID)
+	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, req.SpaceID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
@@ -92,7 +77,7 @@ func (h *ChartsHandler) CreateChart(c *gin.Context) {
 		return
 	}
 
-	chart, err := h.chartsRepo.CreateChart(userID, req.TopicID, req.KindID, req.ActivityTypeID, req.PeriodID)
+	chart, err := h.chartsRepo.CreateChart(userID, req.SpaceID, req.KindID, req.ActivityTypeID, req.PeriodID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
@@ -119,13 +104,7 @@ func (h *ChartsHandler) DeleteChart(c *gin.Context) {
 	}
 
 	userID := c.GetInt("userId")
-	topic, err := h.topicsRepo.GetTopicByID(chart.TopicID)
-	if err != nil || topic == nil {
-		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeInvalidRequest, "Topic error"))
-		return
-	}
-
-	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, topic.SpaceID)
+	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, chart.SpaceID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
@@ -161,13 +140,7 @@ func (h *ChartsHandler) RestoreChart(c *gin.Context) {
 	}
 
 	userID := c.GetInt("userId")
-	topic, err := h.topicsRepo.GetTopicByID(chart.TopicID)
-	if err != nil || topic == nil {
-		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeInvalidRequest, "Topic error"))
-		return
-	}
-
-	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, topic.SpaceID)
+	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, chart.SpaceID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
@@ -203,13 +176,7 @@ func (h *ChartsHandler) UpdateChart(c *gin.Context) {
 	}
 
 	userID := c.GetInt("userId")
-	topic, err := h.topicsRepo.GetTopicByID(chart.TopicID)
-	if err != nil || topic == nil {
-		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeInvalidRequest, "Topic error"))
-		return
-	}
-
-	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, topic.SpaceID)
+	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, chart.SpaceID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
@@ -303,22 +270,12 @@ func (h *ChartsHandler) GetCharts(c *gin.Context) {
 	// Use standardized pagination
 	pagination := types.ParsePaginationParams(c)
 
-	topicIDParam := c.Query("topicId")
-	var topicID *int
-	if topicIDParam != "" {
-		tmp, err := strconv.Atoi(topicIDParam)
-		if err == nil {
-			topicID = &tmp
-		}
-	}
-
 	filters := models.ChartFilters{
 		Page:     pagination.Page,
 		PageSize: pagination.PageSize,
-		TopicID:  topicID,
 	}
 
-	charts, total, err := h.chartsRepo.GetCharts(spaceID, topicID, filters)
+	charts, total, err := h.chartsRepo.GetCharts(spaceID, filters)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return

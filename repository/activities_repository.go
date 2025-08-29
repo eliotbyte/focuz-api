@@ -106,7 +106,6 @@ func (r *ActivitiesRepository) SetActivityDeleted(id int, isDeleted bool) error 
 
 func (r *ActivitiesRepository) GetActivitiesAnalysis(
 	spaceID int,
-	topicID *int,
 	startDate, endDate *time.Time,
 	tags []string,
 	at *models.ActivityType,
@@ -131,13 +130,11 @@ func (r *ActivitiesRepository) GetActivitiesAnalysis(
 
 	joins = append(joins, "JOIN activity_types aty ON a.type_id = aty.id")
 	joins = append(joins, "JOIN note n ON a.note_id = n.id")
-	joins = append(joins, "JOIN topic t ON n.topic_id = t.id")
 
 	conds = append(conds, "a.is_deleted = FALSE")
 	conds = append(conds, "aty.is_deleted = FALSE")
 	conds = append(conds, "n.is_deleted = FALSE")
-	conds = append(conds, "t.is_deleted = FALSE")
-	conds = append(conds, "t.space_id = $"+strconv.Itoa(idx))
+	conds = append(conds, "n.space_id = $"+strconv.Itoa(idx))
 	params = append(params, spaceID)
 	idx++
 
@@ -145,11 +142,6 @@ func (r *ActivitiesRepository) GetActivitiesAnalysis(
 	params = append(params, at.ID)
 	idx++
 
-	if topicID != nil {
-		conds = append(conds, "t.id = $"+strconv.Itoa(idx))
-		params = append(params, *topicID)
-		idx++
-	}
 	if startDate != nil {
 		conds = append(conds, "n.date >= $"+strconv.Itoa(idx))
 		params = append(params, *startDate)

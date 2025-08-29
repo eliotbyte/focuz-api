@@ -5,7 +5,7 @@ import "time"
 type Chart struct {
 	ID             int       `json:"id"`
 	UserID         int       `json:"userId"`
-	TopicID        int       `json:"topicId"`
+	SpaceID        int       `json:"spaceId"`
 	KindID         int       `json:"kindId"`
 	ActivityTypeID int       `json:"activityTypeId"`
 	PeriodID       int       `json:"periodId"`
@@ -20,7 +20,6 @@ type ChartDataPoint struct {
 }
 
 type ChartFilters struct {
-	Page     int  `json:"page"`
-	PageSize int  `json:"pageSize"`
-	TopicID  *int `json:"topicId"`
+	Page     int `json:"page"`
+	PageSize int `json:"pageSize"`
 }

@@ -70,7 +70,6 @@ func main() {
 	}
 
 	spacesRepo := repository.NewSpacesRepository(db)
-	topicsRepo := repository.NewTopicsRepository(db)
 	notesRepo := repository.NewNotesRepository(db)
 	rolesRepo := repository.NewRolesRepository(db)
 	activityTypesRepo := repository.NewActivityTypesRepository(db)
@@ -119,19 +118,17 @@ func main() {
 	}
 
 	// Handlers
-	notesHandler := handlers.NewNotesHandler(notesRepo, spacesRepo, topicsRepo)
+	notesHandler := handlers.NewNotesHandler(notesRepo, spacesRepo)
 	spacesHandler := handlers.NewSpacesHandler(spacesRepo, rolesRepo).WithNotifier(notifier).WithNotificationsRepo(notificationsRepo)
-	topicsHandler := handlers.NewTopicsHandler(topicsRepo, spacesRepo, rolesRepo)
 	activityTypesHandler := handlers.NewActivityTypesHandler(activityTypesRepo, spacesRepo)
 	activitiesHandler := handlers.NewActivitiesHandler(
 		activitiesRepo,
 		spacesRepo,
-		topicsRepo,
 		notesRepo,
 		activityTypesRepo,
 	)
-	attachmentsHandler := handlers.NewAttachmentsHandler(attachmentsRepo, notesRepo, spacesRepo, topicsRepo)
-	chartsHandler := handlers.NewChartsHandler(chartsRepo, spacesRepo, topicsRepo, activityTypesRepo)
+	attachmentsHandler := handlers.NewAttachmentsHandler(attachmentsRepo, notesRepo, spacesRepo)
+	chartsHandler := handlers.NewChartsHandler(chartsRepo, spacesRepo, activityTypesRepo)
 	notificationsHandler := handlers.NewNotificationsHandler(notificationsRepo)
 
 	// Set Gin to release mode in production
@@ -160,13 +157,7 @@ func main() {
 		auth.POST("/spaces/:spaceId/invitations/accept", spacesHandler.AcceptInvitation)
 		auth.POST("/spaces/:spaceId/invitations/decline", spacesHandler.DeclineInvitation)
 
-		auth.POST("/topics", topicsHandler.CreateTopic)
-		auth.PATCH("/topics/:id", topicsHandler.UpdateTopic)
-		auth.PATCH("/topics/:id/delete", topicsHandler.DeleteTopic)
-		auth.PATCH("/topics/:id/restore", topicsHandler.RestoreTopic)
-		auth.GET("/spaces/:spaceId/topics", topicsHandler.GetTopicsBySpace)
-		auth.GET("/topic-types", topicsHandler.GetTopicTypes)
-
+		// notes
 		auth.POST("/notes", notesHandler.CreateNote)
 		auth.PATCH("/notes/:id/delete", notesHandler.DeleteNote)
 		auth.PATCH("/notes/:id/restore", notesHandler.RestoreNote)
@@ -174,6 +165,7 @@ func main() {
 		auth.GET("/notes", notesHandler.GetNotes)
 		auth.GET("/tags/autocomplete", notesHandler.GetTagAutocomplete)
 
+		// charts
 		auth.POST("/charts", chartsHandler.CreateChart)
 		auth.PATCH("/charts/:id/delete", chartsHandler.DeleteChart)
 		auth.PATCH("/charts/:id/restore", chartsHandler.RestoreChart)

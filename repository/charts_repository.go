@@ -16,16 +16,16 @@ func NewChartsRepository(db *sql.DB) *ChartsRepository {
 	return &ChartsRepository{db: db}
 }
 
-func (r *ChartsRepository) CreateChart(userID, topicID, kindID, activityTypeID, periodID int) (*models.Chart, error) {
+func (r *ChartsRepository) CreateChart(userID, spaceID, kindID, activityTypeID, periodID int) (*models.Chart, error) {
 	var chart models.Chart
 	err := r.db.QueryRow(`
-		INSERT INTO chart (user_id, topic_id, kind, activity_type_id, period, created_at, modified_at)
+		INSERT INTO chart (user_id, space_id, kind, activity_type_id, period, created_at, modified_at)
 		VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
-		RETURNING id, user_id, topic_id, kind, activity_type_id, period, created_at, modified_at
-	`, userID, topicID, kindID, activityTypeID, periodID).Scan(
+		RETURNING id, user_id, space_id, kind, activity_type_id, period, created_at, modified_at
+	`, userID, spaceID, kindID, activityTypeID, periodID).Scan(
 		&chart.ID,
 		&chart.UserID,
-		&chart.TopicID,
+		&chart.SpaceID,
 		&chart.KindID,
 		&chart.ActivityTypeID,
 		&chart.PeriodID,
@@ -41,13 +41,13 @@ func (r *ChartsRepository) CreateChart(userID, topicID, kindID, activityTypeID, 
 func (r *ChartsRepository) GetChartByID(id int) (*models.Chart, error) {
 	var chart models.Chart
 	err := r.db.QueryRow(`
-		SELECT id, user_id, topic_id, kind, activity_type_id, period, is_deleted, created_at, modified_at
+		SELECT id, user_id, space_id, kind, activity_type_id, period, is_deleted, created_at, modified_at
 		FROM chart
 		WHERE id = $1
 	`, id).Scan(
 		&chart.ID,
 		&chart.UserID,
-		&chart.TopicID,
+		&chart.SpaceID,
 		&chart.KindID,
 		&chart.ActivityTypeID,
 		&chart.PeriodID,
@@ -82,27 +82,20 @@ func (r *ChartsRepository) UpdateChart(id int, kindID, activityTypeID, periodID 
 	return err
 }
 
-func (r *ChartsRepository) GetCharts(spaceID int, topicID *int, filters models.ChartFilters) ([]*models.Chart, int, error) {
+func (r *ChartsRepository) GetCharts(spaceID int, filters models.ChartFilters) ([]*models.Chart, int, error) {
 	offset := (filters.Page - 1) * filters.PageSize
 	var conditions []string
 	var params []interface{}
 	idx := 1
 
 	conditions = append(conditions, "c.is_deleted = FALSE")
-	conditions = append(conditions, "t.space_id = $"+strconv.Itoa(idx))
+	conditions = append(conditions, "c.space_id = $"+strconv.Itoa(idx))
 	params = append(params, spaceID)
 	idx++
 
-	if topicID != nil {
-		conditions = append(conditions, "c.topic_id = $"+strconv.Itoa(idx))
-		params = append(params, *topicID)
-		idx++
-	}
-
 	query := `
-		SELECT c.id, c.user_id, c.topic_id, c.kind, c.activity_type_id, c.period, c.created_at, c.modified_at
+		SELECT c.id, c.user_id, c.space_id, c.kind, c.activity_type_id, c.period, c.created_at, c.modified_at
 		FROM chart c
-		INNER JOIN topic t ON c.topic_id = t.id
 	`
 
 	if len(conditions) > 0 {
@@ -125,7 +118,7 @@ func (r *ChartsRepository) GetCharts(spaceID int, topicID *int, filters models.C
 		err := rows.Scan(
 			&chart.ID,
 			&chart.UserID,
-			&chart.TopicID,
+			&chart.SpaceID,
 			&chart.KindID,
 			&chart.ActivityTypeID,
 			&chart.PeriodID,
@@ -142,7 +135,6 @@ func (r *ChartsRepository) GetCharts(spaceID int, topicID *int, filters models.C
 	countQuery := `
 		SELECT COUNT(c.id)
 		FROM chart c
-		INNER JOIN topic t ON c.topic_id = t.id
 	`
 	if len(conditions) > 0 {
 		countQuery += " WHERE " + joinConditions(conditions, " AND ")
@@ -210,14 +202,13 @@ func (r *ChartsRepository) GetChartData(chart *models.Chart) ([]models.ChartData
 		       `+aggExpr+` as value
 		FROM activities a
 		JOIN note n ON a.note_id = n.id
-		JOIN topic t ON n.topic_id = t.id
 		WHERE a.type_id = $2
 		  AND a.is_deleted = FALSE
-		  AND t.space_id = (SELECT space_id FROM topic WHERE id = $3)
+		  AND n.space_id = $3
 		  AND a.created_at BETWEEN $4 AND $5
 		GROUP BY period
 		ORDER BY period
-	`, periodType.Name, chart.ActivityTypeID, chart.TopicID, startDate, endDate)
+	`, periodType.Name, chart.ActivityTypeID, chart.SpaceID, startDate, endDate)
 	if err != nil {
 		return nil, err
 	}

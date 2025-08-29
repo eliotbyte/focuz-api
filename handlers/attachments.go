@@ -20,11 +20,10 @@ type AttachmentsHandler struct {
 	attachmentsRepo *repository.AttachmentsRepository
 	notesRepo       *repository.NotesRepository
 	spacesRepo      *repository.SpacesRepository
-	topicsRepo      *repository.TopicsRepository
 }
 
-func NewAttachmentsHandler(a *repository.AttachmentsRepository, n *repository.NotesRepository, s *repository.SpacesRepository, t *repository.TopicsRepository) *AttachmentsHandler {
-	return &AttachmentsHandler{attachmentsRepo: a, notesRepo: n, spacesRepo: s, topicsRepo: t}
+func NewAttachmentsHandler(a *repository.AttachmentsRepository, n *repository.NotesRepository, s *repository.SpacesRepository) *AttachmentsHandler {
+	return &AttachmentsHandler{attachmentsRepo: a, notesRepo: n, spacesRepo: s}
 }
 
 func (h *AttachmentsHandler) UploadFile(c *gin.Context) {
@@ -47,13 +46,7 @@ func (h *AttachmentsHandler) UploadFile(c *gin.Context) {
 		return
 	}
 
-	topic, err := h.topicsRepo.GetTopicByID(note.TopicID)
-	if err != nil || topic == nil || topic.IsDeleted {
-		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeInvalidRequest, "invalid topic"))
-		return
-	}
-
-	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, topic.SpaceID)
+	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, note.SpaceID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
@@ -169,13 +162,7 @@ func (h *AttachmentsHandler) GetFile(c *gin.Context) {
 		return
 	}
 
-	topic, err := h.topicsRepo.GetTopicByID(note.TopicID)
-	if err != nil || topic == nil || topic.IsDeleted {
-		c.JSON(http.StatusForbidden, types.NewErrorResponse(types.ErrorCodeForbidden, "no access"))
-		return
-	}
-
-	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, topic.SpaceID)
+	roleID, err := h.spacesRepo.GetUserRoleIDInSpace(userID, note.SpaceID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, types.NewErrorResponse(types.ErrorCodeInternal, err.Error()))
 		return
