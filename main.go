@@ -79,6 +79,10 @@ func main() {
 	notificationsRepo := repository.NewNotificationsRepository(db)
 	filtersRepo := repository.NewFiltersRepository(db)
 
+	// New repos for sync and tags
+	syncRepo := repository.NewSyncRepository(db)
+	tagsRepo := repository.NewTagsRepository(db)
+
 	r := gin.New()
 	// Structured request ID and JSON access logs
 	r.Use(middleware.RequestIDMiddleware())
@@ -132,6 +136,7 @@ func main() {
 	chartsHandler := handlers.NewChartsHandler(chartsRepo, spacesRepo, activityTypesRepo, notesRepo)
 	notificationsHandler := handlers.NewNotificationsHandler(notificationsRepo)
 	filtersHandler := handlers.NewFiltersHandler(filtersRepo, spacesRepo)
+	syncHandler := handlers.NewSyncHandler(syncRepo, spacesRepo, tagsRepo, filtersRepo)
 
 	// Set Gin to release mode in production
 	if os.Getenv("GIN_MODE") == "release" || strings.ToLower(os.Getenv("APP_ENV")) == "production" {
@@ -159,7 +164,7 @@ func main() {
 		auth.POST("/spaces/:spaceId/invitations/accept", spacesHandler.AcceptInvitation)
 		auth.POST("/spaces/:spaceId/invitations/decline", spacesHandler.DeclineInvitation)
 
-		// notes
+		// notes (legacy, kept for backward compatibility during migration)
 		auth.POST("/notes", notesHandler.CreateNote)
 		auth.PATCH("/notes/:id/delete", notesHandler.DeleteNote)
 		auth.PATCH("/notes/:id/restore", notesHandler.RestoreNote)
@@ -200,6 +205,12 @@ func main() {
 		auth.PATCH("/filters/:id", filtersHandler.Update)
 		auth.PATCH("/filters/:id/delete", filtersHandler.Delete)
 		auth.PATCH("/filters/:id/restore", filtersHandler.Restore)
+
+		// New sync and utility endpoints
+		auth.GET("/sync", syncHandler.Pull)
+		auth.POST("/sync", syncHandler.Push)
+		auth.GET("/spaces/:spaceId/tags", syncHandler.GetTagsBySpace)
+		auth.GET("/spaces/:spaceId/filters", syncHandler.GetFiltersBySpace)
 	}
 
 	r.Run(":8080")

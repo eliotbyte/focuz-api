@@ -1,3 +1,4 @@
+DROP TABLE IF EXISTS chart;
 DROP TABLE IF EXISTS activities;
 DROP TABLE IF EXISTS note_to_tag;
 DROP TABLE IF EXISTS attachments;

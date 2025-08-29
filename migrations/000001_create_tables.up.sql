@@ -115,6 +115,9 @@ CREATE TABLE chart (
     kind INTEGER NOT NULL,
     activity_type_id INTEGER NOT NULL REFERENCES activity_types(id),
     period INTEGER NOT NULL,
+    name VARCHAR(255) NOT NULL DEFAULT '',
+    description TEXT,
+    note_id INTEGER REFERENCES note(id),
     is_deleted BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     modified_at TIMESTAMP NOT NULL DEFAULT NOW()

@@ -83,6 +83,42 @@ docker-compose up -d
 - `POST /upload` - upload a file
 - `GET /files/{id}` - get a file
 
+### Sync (Offline)
+
+- `GET /sync?since=<RFC3339>&spaceId?=<id>` — pull changes since timestamp. Returns notes, tags, filters, charts, activities, spaces changed after `since`. Use for polling or after WS/SSE events.
+- `POST /sync` — push local changes. Body contains arrays: `notes`, `tags`, `filters`, `charts`, `activities`. Server applies with last-write-wins by `modified_at` and returns `mappings` (clientId -> serverId) and `conflicts`.
+
+Example pull:
+```bash
+curl -H "Authorization: Bearer <TOKEN>" \
+     "http://localhost:8080/sync?since=2024-01-01T00:00:00Z"
+```
+
+Example push:
+```bash
+curl -X POST -H "Authorization: Bearer <TOKEN>" -H "Content-Type: application/json" \
+  -d '{
+    "notes": [
+      {
+        "clientId": "tmp-123",
+        "space_id": 1,
+        "user_id": 1,
+        "text": "Hello",
+        "tags": ["important"],
+        "created_at": "2025-01-01T10:00:00Z",
+        "modified_at": "2025-01-01T10:00:00Z"
+      }
+    ],
+    "tags": [], "filters": [], "charts": [], "activities": []
+  }' \
+  http://localhost:8080/sync
+```
+
+### Utilities by Space
+
+- `GET /spaces/{spaceId}/tags` — list tags in space.
+- `GET /spaces/{spaceId}/filters` — list filters in space (alias of `GET /filters?spaceId=...`).
+
 ## Filters
 
 Saved note filters with nested grouping and JSON parameters.
