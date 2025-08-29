@@ -131,6 +131,20 @@ CREATE TABLE notifications (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     read_at TIMESTAMP
 );
+
+-- Filters
+CREATE TABLE filters (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    space_id INTEGER NOT NULL REFERENCES space(id),
+    parent_id INTEGER REFERENCES filters(id),
+    name VARCHAR(255) NOT NULL,
+    params JSONB NOT NULL,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    modified_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
 CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, is_read, created_at DESC);
 
 -- Performance indexes
@@ -145,3 +159,7 @@ CREATE INDEX IF NOT EXISTS idx_activity_types_space_id ON activity_types(space_i
 CREATE INDEX IF NOT EXISTS idx_tag_name ON tag(name);
 CREATE INDEX IF NOT EXISTS idx_note_to_tag_note ON note_to_tag(note_id);
 CREATE INDEX IF NOT EXISTS idx_note_to_tag_tag ON note_to_tag(tag_id);
+-- Filter indexes
+CREATE INDEX IF NOT EXISTS idx_filters_space_id ON filters(space_id);
+CREATE INDEX IF NOT EXISTS idx_filters_parent_id ON filters(parent_id);
+CREATE INDEX IF NOT EXISTS idx_filters_user_id ON filters(user_id);

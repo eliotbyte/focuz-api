@@ -4,6 +4,7 @@ DROP TABLE IF EXISTS attachments;
 DROP TABLE IF EXISTS note;
 DROP TABLE IF EXISTS tag_to_space;
 DROP TABLE IF EXISTS tag;
+DROP TABLE IF EXISTS filters;
 DROP TABLE IF EXISTS notifications;
 
 DROP TABLE IF EXISTS user_to_space;

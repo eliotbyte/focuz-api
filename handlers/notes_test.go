@@ -359,3 +359,29 @@ func (s *E2ETestSuite) Test65_TagFiltering_StrictIncludeAndExclude() {
 	s.True(texts4["note C"])
 	s.False(texts4["note D"])
 }
+
+func (s *E2ETestSuite) Test93_CreateFilterWithComplexParams() {
+	params := map[string]interface{}{
+		"tags":     []string{"important", "!archived"},
+		"notReply": true,
+		"search":   "meeting",
+		"dateFrom": "2024-01-01",
+		"dateTo":   "2024-12-31",
+		"sort":     "modifiedat,ASC",
+		"page":     1,
+		"pageSize": 50,
+	}
+	body := map[string]interface{}{
+		"spaceId": s.createdSpaceID,
+		"name":    "Complex",
+		"params":  params,
+	}
+	b, _ := json.Marshal(body)
+	req, _ := http.NewRequest("POST", s.baseURL+"/filters", bytes.NewBuffer(b))
+	req.Header.Set("Authorization", "Bearer "+s.ownerToken)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := (&http.Client{}).Do(req)
+	s.NoError(err)
+	defer resp.Body.Close()
+	s.Equal(http.StatusCreated, resp.StatusCode)
+}

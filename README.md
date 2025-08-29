@@ -83,6 +83,16 @@ docker-compose up -d
 - `POST /upload` - upload a file
 - `GET /files/{id}` - get a file
 
+## Filters
+
+Saved note filters with nested grouping and JSON parameters.
+
+- Create: POST `/filters` { spaceId, parentId?, name, params<object/json> }
+- List: GET `/filters?spaceId=...&page=1&pageSize=20`
+- Update: PATCH `/filters/{id}` { name?, parentId?, params? }
+- Delete: PATCH `/filters/{id}/delete`
+- Restore: PATCH `/filters/{id}/restore`
+
 ## Technologies
 
 - **Go 1.24** - main language

@@ -77,6 +77,7 @@ func main() {
 	attachmentsRepo := repository.NewAttachmentsRepository(db)
 	chartsRepo := repository.NewChartsRepository(db)
 	notificationsRepo := repository.NewNotificationsRepository(db)
+	filtersRepo := repository.NewFiltersRepository(db)
 
 	r := gin.New()
 	// Structured request ID and JSON access logs
@@ -130,6 +131,7 @@ func main() {
 	attachmentsHandler := handlers.NewAttachmentsHandler(attachmentsRepo, notesRepo, spacesRepo)
 	chartsHandler := handlers.NewChartsHandler(chartsRepo, spacesRepo, activityTypesRepo)
 	notificationsHandler := handlers.NewNotificationsHandler(notificationsRepo)
+	filtersHandler := handlers.NewFiltersHandler(filtersRepo, spacesRepo)
 
 	// Set Gin to release mode in production
 	if os.Getenv("GIN_MODE") == "release" || strings.ToLower(os.Getenv("APP_ENV")) == "production" {
@@ -190,6 +192,13 @@ func main() {
 		auth.GET("/files/:id", attachmentsHandler.GetFile)
 		auth.GET("/notifications/unread", notificationsHandler.ListUnread)
 		auth.POST("/notifications/mark-read", notificationsHandler.MarkRead)
+
+		// filters
+		auth.POST("/filters", filtersHandler.Create)
+		auth.GET("/filters", filtersHandler.List)
+		auth.PATCH("/filters/:id", filtersHandler.Update)
+		auth.PATCH("/filters/:id/delete", filtersHandler.Delete)
+		auth.PATCH("/filters/:id/restore", filtersHandler.Restore)
 	}
 
 	r.Run(":8080")
