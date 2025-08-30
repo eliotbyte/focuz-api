@@ -7,3 +7,9 @@ type InvitationCreated struct {
 	SpaceID int    `json:"spaceId"`
 	Inviter int    `json:"inviterId"`
 }
+
+// SyncPushed notifies all sessions of a user that new changes were pushed.
+// Clients should react by triggering an incremental pull.
+type SyncPushed struct {
+	Type string `json:"type"`
+}

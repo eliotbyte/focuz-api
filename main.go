@@ -115,12 +115,7 @@ func main() {
 
 	// Public endpoints
 	r.GET("/health", handlers.HealthCheck)
-
-	// Auth-protected WebSocket
-	auth := r.Group("/", handlers.AuthMiddleware(jwtSecret))
-	{
-		auth.GET("/ws", websocket.ServeWS(hub))
-	}
+	r.GET("/ws", websocket.ServeWS(hub))
 
 	// Handlers
 	notesHandler := handlers.NewNotesHandler(notesRepo, spacesRepo)
@@ -136,7 +131,7 @@ func main() {
 	chartsHandler := handlers.NewChartsHandler(chartsRepo, spacesRepo, activityTypesRepo, notesRepo)
 	notificationsHandler := handlers.NewNotificationsHandler(notificationsRepo)
 	filtersHandler := handlers.NewFiltersHandler(filtersRepo, spacesRepo)
-	syncHandler := handlers.NewSyncHandler(syncRepo, spacesRepo, tagsRepo, filtersRepo)
+	syncHandler := handlers.NewSyncHandler(syncRepo, spacesRepo, tagsRepo, filtersRepo).WithNotifier(notifier)
 
 	// Set Gin to release mode in production
 	if os.Getenv("GIN_MODE") == "release" || strings.ToLower(os.Getenv("APP_ENV")) == "production" {
@@ -151,7 +146,7 @@ func main() {
 		notesHandler.Login(c)
 	})
 
-	auth = r.Group("/", handlers.AuthMiddleware(jwtSecret))
+	auth := r.Group("/", handlers.AuthMiddleware(jwtSecret))
 	{
 		auth.GET("/spaces", spacesHandler.GetAccessibleSpaces)
 		auth.DELETE("/spaces/:spaceId/users/:userId", spacesHandler.RemoveUser)

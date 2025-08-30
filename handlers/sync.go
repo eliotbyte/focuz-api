@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"time"
 
+	"focuz-api/pkg/events"
+	"focuz-api/pkg/notify"
 	"focuz-api/repository"
 	"focuz-api/types"
 
@@ -16,10 +18,16 @@ type SyncHandler struct {
 	spacesRepo  *repository.SpacesRepository
 	tagsRepo    *repository.TagsRepository
 	filtersRepo *repository.FiltersRepository
+	notifier    notify.Notifier
 }
 
 func NewSyncHandler(syncRepo *repository.SyncRepository, spacesRepo *repository.SpacesRepository, tagsRepo *repository.TagsRepository, filtersRepo *repository.FiltersRepository) *SyncHandler {
 	return &SyncHandler{syncRepo: syncRepo, spacesRepo: spacesRepo, tagsRepo: tagsRepo, filtersRepo: filtersRepo}
+}
+
+func (h *SyncHandler) WithNotifier(n notify.Notifier) *SyncHandler {
+	h.notifier = n
+	return h
 }
 
 // GET /sync?since=RFC3339[&spaceId=]
@@ -85,6 +93,9 @@ func (h *SyncHandler) Push(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, types.NewSuccessResponse(res))
+	if h.notifier != nil && res.Applied > 0 {
+		h.notifier.NotifyUser(userID, events.SyncPushed{Type: "SyncPushed"})
+	}
 }
 
 // GET /spaces/:spaceId/tags

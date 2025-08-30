@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
 )
 
@@ -104,10 +105,32 @@ var upgrader = websocket.Upgrader{
 }
 
 // ServeWS upgrades HTTP connection to WebSocket and registers the client.
-// JWT is not parsed here to avoid duplication; caller must authenticate and set userId in context.
+// JWT is read from either context (if behind AuthMiddleware) or from ?token= query param.
 func ServeWS(h *Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := c.GetInt("userId")
+		if userID == 0 {
+			// Try query token fallback
+			tok := c.Query("token")
+			if tok != "" {
+				secret := os.Getenv("JWT_SECRET")
+				if secret != "" {
+					token, err := jwt.ParseWithClaims(tok, jwt.MapClaims{}, func(token *jwt.Token) (interface{}, error) {
+						if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+							return nil, jwt.ErrSignatureInvalid
+						}
+						return []byte(secret), nil
+					})
+					if err == nil && token != nil && token.Valid {
+						if claims, ok := token.Claims.(jwt.MapClaims); ok && claims["iss"] == "focuz-api" && claims["aud"] == "focuz-fe" {
+							if uid, ok2 := claims["userId"].(float64); ok2 {
+								userID = int(uid)
+							}
+						}
+					}
+				}
+			}
+		}
 		if userID == 0 {
 			c.AbortWithStatus(http.StatusUnauthorized)
 			return
