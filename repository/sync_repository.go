@@ -296,9 +296,9 @@ func (r *SyncRepository) ApplyChanges(userID int, payload types.SyncPushRequest)
 			// Insert note
 			err := r.db.QueryRow(`
 				INSERT INTO note (user_id, text, created_at, modified_at, date, parent_id, space_id, is_deleted)
-				VALUES ($1, $2, COALESCE($3, NOW()), COALESCE($4, NOW()), COALESCE($5, NOW()), $6, $7, FALSE)
+				VALUES ($1, $2, COALESCE($3, NOW()), NOW(), COALESCE($4, NOW()), $5, $6, FALSE)
 				RETURNING id
-			`, userID, *n.Text, n.CreatedAt, n.ModifiedAt, n.Date, n.ParentID, n.SpaceID).Scan(&newID)
+			`, userID, *n.Text, n.CreatedAt, n.Date, n.ParentID, n.SpaceID).Scan(&newID)
 			if err != nil {
 				return nil, err
 			}
@@ -320,9 +320,9 @@ func (r *SyncRepository) ApplyChanges(userID int, payload types.SyncPushRequest)
 			var newID int
 			err := r.db.QueryRow(`
 				INSERT INTO note (id, user_id, text, created_at, modified_at, date, parent_id, space_id, is_deleted)
-				VALUES ($1, $2, $3, COALESCE($4, NOW()), COALESCE($5, NOW()), COALESCE($6, NOW()), $7, $8, $9)
+				VALUES ($1, $2, $3, COALESCE($4, NOW()), NOW(), COALESCE($5, NOW()), $6, $7, $8)
 				RETURNING id
-			`, *n.ID, userID, toString(n.Text), n.CreatedAt, n.ModifiedAt, n.Date, n.ParentID, n.SpaceID, n.DeletedAt != nil).Scan(&newID)
+			`, *n.ID, userID, toString(n.Text), n.CreatedAt, n.Date, n.ParentID, n.SpaceID, n.DeletedAt != nil).Scan(&newID)
 			if err != nil {
 				return nil, err
 			}
@@ -336,8 +336,8 @@ func (r *SyncRepository) ApplyChanges(userID int, payload types.SyncPushRequest)
 		}
 		if n.ModifiedAt.After(serverModified) {
 			_, err := r.db.Exec(`
-				UPDATE note SET text = COALESCE($2, text), date = COALESCE($3, date), parent_id = $4, is_deleted = $5, modified_at = $6 WHERE id = $1
-			`, *n.ID, n.Text, n.Date, n.ParentID, n.DeletedAt != nil, n.ModifiedAt)
+				UPDATE note SET text = COALESCE($2, text), date = COALESCE($3, date), parent_id = $4, is_deleted = $5, modified_at = NOW() WHERE id = $1
+			`, *n.ID, n.Text, n.Date, n.ParentID, n.DeletedAt != nil)
 			if err != nil {
 				return nil, err
 			}
@@ -371,8 +371,8 @@ func (r *SyncRepository) ApplyChanges(userID int, payload types.SyncPushRequest)
 			paramsBytes, _ := json.Marshal(f.Params)
 			_, err := r.db.Exec(`
 				INSERT INTO filters (id, user_id, space_id, parent_id, name, params, is_deleted, created_at, modified_at)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, NOW()), COALESCE($9, NOW()))
-			`, f.ID, f.UserID, f.SpaceID, f.ParentID, f.Name, paramsBytes, f.DeletedAt != nil, f.CreatedAt, f.ModifiedAt)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, NOW()), NOW())
+			`, f.ID, f.UserID, f.SpaceID, f.ParentID, f.Name, paramsBytes, f.DeletedAt != nil, f.CreatedAt)
 			if err != nil {
 				return nil, err
 			}
@@ -383,7 +383,7 @@ func (r *SyncRepository) ApplyChanges(userID int, payload types.SyncPushRequest)
 		}
 		if f.ModifiedAt.After(serverModified) {
 			paramsBytes, _ := json.Marshal(f.Params)
-			_, err := r.db.Exec(`UPDATE filters SET name = $2, parent_id = $3, params = $4, is_deleted = $5, modified_at = $6 WHERE id = $1`, f.ID, f.Name, f.ParentID, paramsBytes, f.DeletedAt != nil, f.ModifiedAt)
+			_, err := r.db.Exec(`UPDATE filters SET name = $2, parent_id = $3, params = $4, is_deleted = $5, modified_at = NOW() WHERE id = $1`, f.ID, f.Name, f.ParentID, paramsBytes, f.DeletedAt != nil)
 			if err != nil {
 				return nil, err
 			}
@@ -403,7 +403,7 @@ func (r *SyncRepository) ApplyChanges(userID int, payload types.SyncPushRequest)
 			return nil, err
 		}
 		if ch.ModifiedAt.After(serverModified) {
-			_, err := r.db.Exec(`UPDATE chart SET name = $2, description = $3, is_deleted = $4, modified_at = $5 WHERE id = $1`, ch.ID, ch.Name, ch.Description, ch.DeletedAt != nil, ch.ModifiedAt)
+			_, err := r.db.Exec(`UPDATE chart SET name = $2, description = $3, is_deleted = $4, modified_at = NOW() WHERE id = $1`, ch.ID, ch.Name, ch.Description, ch.DeletedAt != nil)
 			if err != nil {
 				return nil, err
 			}
@@ -422,7 +422,7 @@ func (r *SyncRepository) ApplyChanges(userID int, payload types.SyncPushRequest)
 		}
 		if a.ModifiedAt.After(serverModified) {
 			val, _ := json.Marshal(a.Value)
-			_, err := r.db.Exec(`UPDATE activities SET value = $2, is_deleted = $3, modified_at = $4 WHERE id = $1`, a.ID, val, a.DeletedAt != nil, a.ModifiedAt)
+			_, err := r.db.Exec(`UPDATE activities SET value = $2, is_deleted = $3, modified_at = NOW() WHERE id = $1`, a.ID, val, a.DeletedAt != nil)
 			if err != nil {
 				return nil, err
 			}
