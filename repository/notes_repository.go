@@ -173,6 +173,12 @@ func (r *NotesRepository) UpdateNoteDeleted(id int, isDeleted bool) error {
 	return err
 }
 
+// TouchNoteModified updates note.modified_at to NOW() without changing other fields.
+func (r *NotesRepository) TouchNoteModified(noteID int) error {
+	_, err := r.db.Exec(`UPDATE note SET modified_at = NOW() WHERE id = $1`, noteID)
+	return err
+}
+
 func (r *NotesRepository) GetNoteByID(id int) (*models.Note, error) {
 	var note models.Note
 	var parentID sql.NullInt64

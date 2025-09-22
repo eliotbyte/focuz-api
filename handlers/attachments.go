@@ -99,6 +99,9 @@ func (h *AttachmentsHandler) UploadFile(c *gin.Context) {
 		return
 	}
 
+	// Touch note.modified_at to reflect attachment change
+	_ = h.notesRepo.TouchNoteModified(noteID)
+
 	c.JSON(http.StatusCreated, types.NewSuccessResponse(map[string]interface{}{
 		"attachment_id": attachmentID,
 		"filename":      file.Filename,

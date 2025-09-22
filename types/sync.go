@@ -34,6 +34,8 @@ type NoteChange struct {
 	CreatedAt  time.Time  `json:"created_at"`
 	ModifiedAt time.Time  `json:"modified_at"`
 	DeletedAt  *time.Time `json:"deleted_at,omitempty"`
+	// Attachments are included for pull; for push, clients may include only id, file_name, modified_at, is_deleted
+	Attachments []AttachmentChange `json:"attachments,omitempty"`
 }
 
 type TagChange struct {
@@ -91,6 +93,8 @@ type AttachmentChange struct {
 	FileSize   int64     `json:"file_size"`
 	CreatedAt  time.Time `json:"created_at"`
 	ModifiedAt time.Time `json:"modified_at"`
+	// For push only. Server will ignore for pull.
+	IsDeleted *bool `json:"is_deleted,omitempty"`
 }
 
 type ActivityTypeChange struct {

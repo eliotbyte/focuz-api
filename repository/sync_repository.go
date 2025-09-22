@@ -46,17 +46,29 @@ func (r *SyncRepository) GetChangesSince(userID int, accessibleSpaceIDs []int, s
 	}
 	rows.Close()
 
-	// Notes (include deleted)
+	// Notes (include deleted). Include attachments metadata for each note.
 	noteRows, err := r.db.Query(`
-		SELECT n.id, n.user_id, n.space_id, n.text, n.date, n.parent_id, n.created_at, n.modified_at, n.is_deleted,
-		  COALESCE((SELECT ARRAY_AGG(t.name ORDER BY t.name)
-		           FROM note_to_tag nt JOIN tag t ON t.id = nt.tag_id
-		           WHERE nt.note_id = n.id), ARRAY[]::text[]) AS tags
-		FROM note n
-		WHERE n.space_id = ANY($1)
-		AND n.modified_at > $2
-		ORDER BY n.id
-	`, pq.Array(accessibleSpaceIDs), since)
+        SELECT n.id, n.user_id, n.space_id, n.text, n.date, n.parent_id, n.created_at, n.modified_at, n.is_deleted,
+          COALESCE((SELECT ARRAY_AGG(t.name ORDER BY t.name)
+                   FROM note_to_tag nt JOIN tag t ON t.id = nt.tag_id
+                   WHERE nt.note_id = n.id), ARRAY[]::text[]) AS tags,
+          COALESCE((
+            SELECT json_agg(json_build_object(
+              'id', att.id,
+              'note_id', att.note_id,
+              'file_name', att.file_name,
+              'file_type', att.file_type,
+              'file_size', att.file_size,
+              'created_at', att.created_at,
+              'modified_at', att.modified_at
+            ) ORDER BY att.modified_at ASC, att.id ASC)
+            FROM attachments att WHERE att.note_id = n.id
+          ), '[]'::json) AS attachments
+        FROM note n
+        WHERE n.space_id = ANY($1)
+        AND n.modified_at > $2
+        ORDER BY n.id
+    `, pq.Array(accessibleSpaceIDs), since)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +80,8 @@ func (r *SyncRepository) GetChangesSince(userID int, accessibleSpaceIDs []int, s
 		var date time.Time
 		var parentID sql.NullInt64
 		var tags []string
-		if err := noteRows.Scan(&id, &userIDRow, &spaceID, &text, &date, &parentID, &created, &modified, &isDeleted, pq.Array(&tags)); err != nil {
+		var attachmentsJSON []byte
+		if err := noteRows.Scan(&id, &userIDRow, &spaceID, &text, &date, &parentID, &created, &modified, &isDeleted, pq.Array(&tags), &attachmentsJSON); err != nil {
 			noteRows.Close()
 			return nil, err
 		}
@@ -85,7 +98,7 @@ func (r *SyncRepository) GetChangesSince(userID int, accessibleSpaceIDs []int, s
 			tmp := int(parentID.Int64)
 			parentPtr = &tmp
 		}
-		resp.Notes = append(resp.Notes, types.NoteChange{
+		var noteChange = types.NoteChange{
 			ID:         &id,
 			SpaceID:    spaceID,
 			UserID:     userIDRow,
@@ -96,7 +109,13 @@ func (r *SyncRepository) GetChangesSince(userID int, accessibleSpaceIDs []int, s
 			CreatedAt:  created,
 			ModifiedAt: modified,
 			DeletedAt:  deletedAt,
-		})
+		}
+		if len(attachmentsJSON) > 0 {
+			var atts []types.AttachmentChange
+			_ = json.Unmarshal(attachmentsJSON, &atts)
+			noteChange.Attachments = atts
+		}
+		resp.Notes = append(resp.Notes, noteChange)
 	}
 	noteRows.Close()
 
@@ -336,13 +355,50 @@ func (r *SyncRepository) ApplyChanges(userID int, payload types.SyncPushRequest)
 		}
 		if n.ModifiedAt.After(serverModified) {
 			_, err := r.db.Exec(`
-				UPDATE note SET text = COALESCE($2, text), date = COALESCE($3, date), parent_id = $4, is_deleted = $5, modified_at = NOW() WHERE id = $1
-			`, *n.ID, n.Text, n.Date, n.ParentID, n.DeletedAt != nil)
+                UPDATE note SET text = COALESCE($2, text), date = COALESCE($3, date), parent_id = $4, is_deleted = $5, modified_at = NOW() WHERE id = $1
+            `, *n.ID, n.Text, n.Date, n.ParentID, n.DeletedAt != nil)
 			if err != nil {
 				return nil, err
 			}
 			if err := r.replaceNoteTags(*n.ID, n.Tags, n.SpaceID); err != nil {
 				return nil, err
+			}
+			// Apply attachment edits if provided: only id, file_name, modified_at, is_deleted
+			if len(n.Attachments) > 0 {
+				for _, a := range n.Attachments {
+					if a.ID == "" {
+						continue
+					}
+					// Verify attachment belongs to note
+					var attNoteID int
+					err := r.db.QueryRow(`SELECT note_id FROM attachments WHERE id = $1`, a.ID).Scan(&attNoteID)
+					if err == sql.ErrNoRows {
+						continue
+					} else if err != nil {
+						return nil, err
+					}
+					if attNoteID != *n.ID {
+						continue
+					}
+					// Rename if file_name provided
+					if a.FileName != "" {
+						if _, err := r.db.Exec(`UPDATE attachments SET file_name = $2, modified_at = $3 WHERE id = $1`, a.ID, a.FileName, a.ModifiedAt); err != nil {
+							return nil, err
+						}
+					} else if !a.ModifiedAt.IsZero() {
+						// Only touch modified_at to reorder
+						if _, err := r.db.Exec(`UPDATE attachments SET modified_at = $2 WHERE id = $1`, a.ID, a.ModifiedAt); err != nil {
+							return nil, err
+						}
+					}
+					// Handle soft delete via is_deleted flag
+					if a.IsDeleted != nil && *a.IsDeleted {
+						// Hard delete attachment record and object metadata only; actual object cleanup can be async/out-of-scope
+						if _, err := r.db.Exec(`DELETE FROM attachments WHERE id = $1`, a.ID); err != nil {
+							return nil, err
+						}
+					}
+				}
 			}
 			resp.Applied++
 		} else {
