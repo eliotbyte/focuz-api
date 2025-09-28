@@ -48,7 +48,8 @@ type TagChange struct {
 }
 
 type FilterChange struct {
-	ID         int         `json:"id"`
+	ID         *int        `json:"id,omitempty"`
+	ClientID   *string     `json:"clientId,omitempty"`
 	SpaceID    int         `json:"space_id"`
 	UserID     int         `json:"user_id"`
 	ParentID   *int        `json:"parent_id,omitempty"`

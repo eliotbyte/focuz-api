@@ -174,7 +174,9 @@ func (r *SyncRepository) GetChangesSince(userID int, accessibleSpaceIDs []int, s
 			tmp := int(parentID.Int64)
 			parentPtr = &tmp
 		}
-		resp.Filters = append(resp.Filters, types.FilterChange{ID: id, SpaceID: spaceID, UserID: userIDRow, ParentID: parentPtr, Name: name, Params: params, CreatedAt: created, ModifiedAt: modified, DeletedAt: deletedAt})
+		// Align with pointer ID in type
+		idCopy := id
+		resp.Filters = append(resp.Filters, types.FilterChange{ID: &idCopy, SpaceID: spaceID, UserID: userIDRow, ParentID: parentPtr, Name: name, Params: params, CreatedAt: created, ModifiedAt: modified, DeletedAt: deletedAt})
 	}
 	filterRows.Close()
 
@@ -416,19 +418,40 @@ func (r *SyncRepository) ApplyChanges(userID int, payload types.SyncPushRequest)
 		}
 	}
 
-	// Filters (LWW on name/params/parent)
+	// Filters (create when id is nil; otherwise LWW on name/params/parent)
 	for _, f := range payload.Filters {
-		if f.ID == 0 {
+		// Create new when no ID provided
+		if f.ID == nil {
+			// Require spaceId and name; params may be any JSON
+			if f.SpaceID == 0 || f.Name == "" {
+				continue
+			}
+			paramsBytes, _ := json.Marshal(f.Params)
+			var newID int
+			err := r.db.QueryRow(`
+                INSERT INTO filters (user_id, space_id, parent_id, name, params, is_deleted, created_at, modified_at)
+                VALUES ($1, $2, $3, $4, $5, FALSE, COALESCE($6, NOW()), NOW())
+                RETURNING id
+            `, userID, f.SpaceID, f.ParentID, f.Name, paramsBytes, f.CreatedAt).Scan(&newID)
+			if err != nil {
+				return nil, err
+			}
+			resp.Applied++
+			if f.ClientID != nil {
+				resp.Mappings = append(resp.Mappings, types.Mapping{Resource: "filter", ClientID: *f.ClientID, ServerID: newID})
+			}
 			continue
 		}
+
 		var serverModified time.Time
-		err := r.db.QueryRow(`SELECT modified_at FROM filters WHERE id = $1`, f.ID).Scan(&serverModified)
+		err := r.db.QueryRow(`SELECT modified_at FROM filters WHERE id = $1`, *f.ID).Scan(&serverModified)
 		if err == sql.ErrNoRows {
+			// Create with forced id to preserve client-known id
 			paramsBytes, _ := json.Marshal(f.Params)
 			_, err := r.db.Exec(`
-				INSERT INTO filters (id, user_id, space_id, parent_id, name, params, is_deleted, created_at, modified_at)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, NOW()), NOW())
-			`, f.ID, f.UserID, f.SpaceID, f.ParentID, f.Name, paramsBytes, f.DeletedAt != nil, f.CreatedAt)
+                INSERT INTO filters (id, user_id, space_id, parent_id, name, params, is_deleted, created_at, modified_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, NOW()), NOW())
+            `, *f.ID, f.UserID, f.SpaceID, f.ParentID, f.Name, paramsBytes, f.DeletedAt != nil, f.CreatedAt)
 			if err != nil {
 				return nil, err
 			}
@@ -439,13 +462,13 @@ func (r *SyncRepository) ApplyChanges(userID int, payload types.SyncPushRequest)
 		}
 		if f.ModifiedAt.After(serverModified) {
 			paramsBytes, _ := json.Marshal(f.Params)
-			_, err := r.db.Exec(`UPDATE filters SET name = $2, parent_id = $3, params = $4, is_deleted = $5, modified_at = NOW() WHERE id = $1`, f.ID, f.Name, f.ParentID, paramsBytes, f.DeletedAt != nil)
+			_, err := r.db.Exec(`UPDATE filters SET name = $2, parent_id = $3, params = $4, is_deleted = $5, modified_at = NOW() WHERE id = $1`, *f.ID, f.Name, f.ParentID, paramsBytes, f.DeletedAt != nil)
 			if err != nil {
 				return nil, err
 			}
 			resp.Applied++
 		} else {
-			resp.Conflicts = append(resp.Conflicts, types.Conflict{Resource: "filter", ID: f.ID, Reason: "server-newer"})
+			resp.Conflicts = append(resp.Conflicts, types.Conflict{Resource: "filter", ID: *f.ID, Reason: "server-newer"})
 		}
 	}
 
