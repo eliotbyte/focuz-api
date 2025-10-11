@@ -9,8 +9,6 @@ type SyncPullResponse struct {
 	Tags          []TagChange          `json:"tags"`
 	Filters       []FilterChange       `json:"filters"`
 	Charts        []ChartChange        `json:"charts"`
-	Activities    []ActivityChange     `json:"activities"`
-	Attachments   []AttachmentChange   `json:"attachments"`
 	ActivityTypes []ActivityTypeChange `json:"activityTypes"`
 }
 
@@ -34,8 +32,9 @@ type NoteChange struct {
 	CreatedAt  time.Time  `json:"created_at"`
 	ModifiedAt time.Time  `json:"modified_at"`
 	DeletedAt  *time.Time `json:"deleted_at,omitempty"`
-	// Attachments are included for pull; for push, clients may include only id, file_name, modified_at, is_deleted
-	Attachments []AttachmentChange `json:"attachments,omitempty"`
+	// Activities and attachments are included for pull; for push, clients may include only id, file_name, modified_at, is_deleted for attachments
+	Activities  []ActivityChange   `json:"activities"`
+	Attachments []AttachmentChange `json:"attachments"`
 }
 
 type TagChange struct {
@@ -88,7 +87,7 @@ type ActivityChange struct {
 
 type AttachmentChange struct {
 	ID         string    `json:"id"`
-	NoteID     int       `json:"note_id"`
+	NoteID     *int      `json:"note_id,omitempty"`
 	FileName   string    `json:"file_name"`
 	FileType   string    `json:"file_type"`
 	FileSize   int64     `json:"file_size"`

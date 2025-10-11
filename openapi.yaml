@@ -1700,14 +1700,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ChartChange'
-        activities:
-          type: array
-          items:
-            $ref: '#/components/schemas/ActivityChange'
-        attachments:
-          type: array
-          items:
-            $ref: '#/components/schemas/AttachmentChange'
         activityTypes:
           type: array
           items:
@@ -1738,6 +1730,14 @@ components:
         created_at: { type: string, format: date-time }
         modified_at: { type: string, format: date-time }
         deleted_at: { type: string, format: date-time, nullable: true }
+        activities:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActivityChange'
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttachmentChange'
 
     TagChange:
       type: object
@@ -1846,7 +1846,7 @@ components:
       type: object
       properties:
         id: { type: string }
-        note_id: { type: integer }
+        note_id: { type: integer, nullable: true }
         file_name: { type: string }
         file_type: { type: string }
         file_size: { type: integer, format: int64 }

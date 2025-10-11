@@ -46,7 +46,7 @@ func (r *SyncRepository) GetChangesSince(userID int, accessibleSpaceIDs []int, s
 	}
 	rows.Close()
 
-	// Notes (include deleted). Include attachments metadata for each note.
+	// Notes (include deleted). Include nested activities and attachments (with RFC3339 timestamps) for each note.
 	noteRows, err := r.db.Query(`
         SELECT n.id, n.user_id, n.space_id, n.text, n.date, n.parent_id, n.created_at, n.modified_at, n.is_deleted,
           COALESCE((SELECT ARRAY_AGG(t.name ORDER BY t.name)
@@ -54,19 +54,33 @@ func (r *SyncRepository) GetChangesSince(userID int, accessibleSpaceIDs []int, s
                    WHERE nt.note_id = n.id), ARRAY[]::text[]) AS tags,
           COALESCE((
             SELECT json_agg(json_build_object(
+              'id', a.id,
+              'user_id', a.user_id,
+              'type_id', a.type_id,
+              'value', a.value,
+              'created_at', to_char(a.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+              'modified_at', to_char(a.modified_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+            ) ORDER BY a.modified_at ASC, a.id ASC)
+            FROM activities a WHERE a.note_id = n.id AND a.is_deleted = FALSE
+          ), '[]'::json) AS activities,
+          COALESCE((
+            SELECT json_agg(json_build_object(
               'id', att.id,
-              'note_id', att.note_id,
               'file_name', att.file_name,
               'file_type', att.file_type,
               'file_size', att.file_size,
-              'created_at', att.created_at,
-              'modified_at', att.modified_at
+              'created_at', to_char(att.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+              'modified_at', to_char(att.modified_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
             ) ORDER BY att.modified_at ASC, att.id ASC)
             FROM attachments att WHERE att.note_id = n.id
           ), '[]'::json) AS attachments
         FROM note n
         WHERE n.space_id = ANY($1)
-        AND n.modified_at > $2
+        AND (
+          n.modified_at > $2 OR
+          EXISTS (SELECT 1 FROM activities a WHERE a.note_id = n.id AND a.modified_at > $2) OR
+          EXISTS (SELECT 1 FROM attachments att WHERE att.note_id = n.id AND att.modified_at > $2)
+        )
         ORDER BY n.id
     `, pq.Array(accessibleSpaceIDs), since)
 	if err != nil {
@@ -80,8 +94,9 @@ func (r *SyncRepository) GetChangesSince(userID int, accessibleSpaceIDs []int, s
 		var date time.Time
 		var parentID sql.NullInt64
 		var tags []string
+		var activitiesJSON []byte
 		var attachmentsJSON []byte
-		if err := noteRows.Scan(&id, &userIDRow, &spaceID, &text, &date, &parentID, &created, &modified, &isDeleted, pq.Array(&tags), &attachmentsJSON); err != nil {
+		if err := noteRows.Scan(&id, &userIDRow, &spaceID, &text, &date, &parentID, &created, &modified, &isDeleted, pq.Array(&tags), &activitiesJSON, &attachmentsJSON); err != nil {
 			noteRows.Close()
 			return nil, err
 		}
@@ -109,6 +124,11 @@ func (r *SyncRepository) GetChangesSince(userID int, accessibleSpaceIDs []int, s
 			CreatedAt:  created,
 			ModifiedAt: modified,
 			DeletedAt:  deletedAt,
+		}
+		if len(activitiesJSON) > 0 {
+			var acts []types.ActivityChange
+			_ = json.Unmarshal(activitiesJSON, &acts)
+			noteChange.Activities = acts
 		}
 		if len(attachmentsJSON) > 0 {
 			var atts []types.AttachmentChange
@@ -204,53 +224,7 @@ func (r *SyncRepository) GetChangesSince(userID int, accessibleSpaceIDs []int, s
 	}
 	chartRows.Close()
 
-	// Activities
-	actRows, err := r.db.Query(`
-		SELECT id, user_id, type_id, value, note_id, created_at, modified_at, is_deleted
-		FROM activities
-		WHERE modified_at > $2
-		AND (note_id IS NULL OR EXISTS (SELECT 1 FROM note n WHERE n.id = activities.note_id AND n.space_id = ANY($1)))
-	`, pq.Array(accessibleSpaceIDs), since)
-	if err != nil {
-		return nil, err
-	}
-	for actRows.Next() {
-		var it types.ActivityChange
-		var raw []byte
-		var isDeleted bool
-		if err := actRows.Scan(&it.ID, &it.UserID, &it.TypeID, &raw, &it.NoteID, &it.CreatedAt, &it.ModifiedAt, &isDeleted); err != nil {
-			actRows.Close()
-			return nil, err
-		}
-		var anyVal interface{}
-		_ = json.Unmarshal(raw, &anyVal)
-		it.Value = anyVal
-		if isDeleted {
-			it.DeletedAt = &it.ModifiedAt
-		}
-		resp.Activities = append(resp.Activities, it)
-	}
-	actRows.Close()
-
-	// Attachments for notes in accessible spaces
-	attRows, err := r.db.Query(`
-		SELECT a.id, a.note_id, a.file_name, a.file_type, a.file_size, a.created_at, a.modified_at
-		FROM attachments a
-		WHERE a.modified_at > $2
-		AND EXISTS (SELECT 1 FROM note n WHERE n.id = a.note_id AND n.space_id = ANY($1))
-	`, pq.Array(accessibleSpaceIDs), since)
-	if err != nil {
-		return nil, err
-	}
-	for attRows.Next() {
-		var it types.AttachmentChange
-		if err := attRows.Scan(&it.ID, &it.NoteID, &it.FileName, &it.FileType, &it.FileSize, &it.CreatedAt, &it.ModifiedAt); err != nil {
-			attRows.Close()
-			return nil, err
-		}
-		resp.Attachments = append(resp.Attachments, it)
-	}
-	attRows.Close()
+	// Removed: root-level Activities and Attachments. They are now nested under notes.
 
 	// Activity types (default or space-specific)
 	atyRows, err := r.db.Query(`
@@ -327,6 +301,47 @@ func (r *SyncRepository) ApplyChanges(userID int, payload types.SyncPushRequest)
 			if err := r.replaceNoteTags(newID, n.Tags, n.SpaceID); err != nil {
 				return nil, err
 			}
+			// Apply nested activities (create or upsert by type within note)
+			if len(n.Activities) > 0 {
+				for _, a := range n.Activities {
+					val, _ := json.Marshal(a.Value)
+					// If activity with same type already exists for this note, LWW on modified_at
+					var existingID int
+					var existingModified time.Time
+					err := r.db.QueryRow(`SELECT id, modified_at FROM activities WHERE note_id = $1 AND type_id = $2`, newID, a.TypeID).Scan(&existingID, &existingModified)
+					if err == sql.ErrNoRows {
+						createdAt := a.CreatedAt
+						if createdAt.IsZero() {
+							createdAt = time.Now()
+						}
+						modifiedAt := a.ModifiedAt
+						if modifiedAt.IsZero() {
+							modifiedAt = createdAt
+						}
+						isDeleted := a.DeletedAt != nil
+						if _, err := r.db.Exec(`
+							INSERT INTO activities (user_id, type_id, value, note_id, created_at, modified_at, is_deleted)
+							VALUES ($1, $2, $3, $4, $5, $6, $7)
+						`, userID, a.TypeID, val, newID, createdAt, modifiedAt, isDeleted); err != nil {
+							return nil, err
+						}
+						resp.Applied++
+					} else if err != nil {
+						return nil, err
+					} else {
+						// Update existing by LWW
+						if a.ModifiedAt.After(existingModified) {
+							_, err := r.db.Exec(`UPDATE activities SET value = $2, is_deleted = $3, modified_at = NOW() WHERE id = $1`, existingID, val, a.DeletedAt != nil)
+							if err != nil {
+								return nil, err
+							}
+							resp.Applied++
+						} else {
+							resp.Conflicts = append(resp.Conflicts, types.Conflict{Resource: "activity", ID: existingID, Reason: "server-newer"})
+						}
+					}
+				}
+			}
 			resp.Applied++
 			if n.ClientID != nil {
 				resp.Mappings = append(resp.Mappings, types.Mapping{Resource: "note", ClientID: *n.ClientID, ServerID: newID})
@@ -364,6 +379,69 @@ func (r *SyncRepository) ApplyChanges(userID int, payload types.SyncPushRequest)
 			}
 			if err := r.replaceNoteTags(*n.ID, n.Tags, n.SpaceID); err != nil {
 				return nil, err
+			}
+			// Apply nested activities for this note (LWW per activity)
+			if len(n.Activities) > 0 {
+				for _, a := range n.Activities {
+					val, _ := json.Marshal(a.Value)
+					if a.ID != 0 {
+						var currentNoteID int
+						var currentModified time.Time
+						err := r.db.QueryRow(`SELECT note_id, modified_at FROM activities WHERE id = $1`, a.ID).Scan(&currentNoteID, &currentModified)
+						if err == sql.ErrNoRows {
+							continue
+						} else if err != nil {
+							return nil, err
+						}
+						if currentNoteID != *n.ID {
+							continue
+						}
+						if a.ModifiedAt.After(currentModified) {
+							_, err := r.db.Exec(`UPDATE activities SET value = $2, is_deleted = $3, modified_at = NOW() WHERE id = $1`, a.ID, val, a.DeletedAt != nil)
+							if err != nil {
+								return nil, err
+							}
+							resp.Applied++
+						} else {
+							resp.Conflicts = append(resp.Conflicts, types.Conflict{Resource: "activity", ID: a.ID, Reason: "server-newer"})
+						}
+						continue
+					}
+					// New activity by type for this note
+					var existingID int
+					var existingModified time.Time
+					err := r.db.QueryRow(`SELECT id, modified_at FROM activities WHERE note_id = $1 AND type_id = $2`, *n.ID, a.TypeID).Scan(&existingID, &existingModified)
+					if err == sql.ErrNoRows {
+						createdAt := a.CreatedAt
+						if createdAt.IsZero() {
+							createdAt = time.Now()
+						}
+						modifiedAt := a.ModifiedAt
+						if modifiedAt.IsZero() {
+							modifiedAt = createdAt
+						}
+						isDeleted := a.DeletedAt != nil
+						if _, err := r.db.Exec(`
+							INSERT INTO activities (user_id, type_id, value, note_id, created_at, modified_at, is_deleted)
+							VALUES ($1, $2, $3, $4, $5, $6, $7)
+						`, userID, a.TypeID, val, *n.ID, createdAt, modifiedAt, isDeleted); err != nil {
+							return nil, err
+						}
+						resp.Applied++
+					} else if err != nil {
+						return nil, err
+					} else {
+						if a.ModifiedAt.After(existingModified) {
+							_, err := r.db.Exec(`UPDATE activities SET value = $2, is_deleted = $3, modified_at = NOW() WHERE id = $1`, existingID, val, a.DeletedAt != nil)
+							if err != nil {
+								return nil, err
+							}
+							resp.Applied++
+						} else {
+							resp.Conflicts = append(resp.Conflicts, types.Conflict{Resource: "activity", ID: existingID, Reason: "server-newer"})
+						}
+					}
+				}
 			}
 			// Apply attachment edits if provided: only id, file_name, modified_at, is_deleted
 			if len(n.Attachments) > 0 {
@@ -414,6 +492,69 @@ func (r *SyncRepository) ApplyChanges(userID int, payload types.SyncPushRequest)
 				}
 				server := types.NoteChange{ID: &current.ID, SpaceID: current.SpaceID, UserID: current.UserID, Text: &current.Text, Tags: []string{}, Date: &current.Date, CreatedAt: current.CreatedAt, ModifiedAt: current.ModifiedAt, DeletedAt: deletedAt}
 				resp.Conflicts = append(resp.Conflicts, types.Conflict{Resource: "note", ID: current.ID, Reason: "server-newer", Server: server})
+			}
+			// Even if note didn't win LWW, apply nested activities independently (LWW per activity)
+			if len(n.Activities) > 0 {
+				for _, a := range n.Activities {
+					val, _ := json.Marshal(a.Value)
+					if a.ID != 0 {
+						var currentNoteID int
+						var currentModified time.Time
+						err := r.db.QueryRow(`SELECT note_id, modified_at FROM activities WHERE id = $1`, a.ID).Scan(&currentNoteID, &currentModified)
+						if err == sql.ErrNoRows {
+							continue
+						} else if err != nil {
+							return nil, err
+						}
+						if currentNoteID != *n.ID {
+							continue
+						}
+						if a.ModifiedAt.After(currentModified) {
+							_, err := r.db.Exec(`UPDATE activities SET value = $2, is_deleted = $3, modified_at = NOW() WHERE id = $1`, a.ID, val, a.DeletedAt != nil)
+							if err != nil {
+								return nil, err
+							}
+							resp.Applied++
+						} else {
+							resp.Conflicts = append(resp.Conflicts, types.Conflict{Resource: "activity", ID: a.ID, Reason: "server-newer"})
+						}
+						continue
+					}
+					// New activity by type for this note
+					var existingID int
+					var existingModified time.Time
+					err := r.db.QueryRow(`SELECT id, modified_at FROM activities WHERE note_id = $1 AND type_id = $2`, *n.ID, a.TypeID).Scan(&existingID, &existingModified)
+					if err == sql.ErrNoRows {
+						createdAt := a.CreatedAt
+						if createdAt.IsZero() {
+							createdAt = time.Now()
+						}
+						modifiedAt := a.ModifiedAt
+						if modifiedAt.IsZero() {
+							modifiedAt = createdAt
+						}
+						isDeleted := a.DeletedAt != nil
+						if _, err := r.db.Exec(`
+							INSERT INTO activities (user_id, type_id, value, note_id, created_at, modified_at, is_deleted)
+							VALUES ($1, $2, $3, $4, $5, $6, $7)
+						`, userID, a.TypeID, val, *n.ID, createdAt, modifiedAt, isDeleted); err != nil {
+							return nil, err
+						}
+						resp.Applied++
+					} else if err != nil {
+						return nil, err
+					} else {
+						if a.ModifiedAt.After(existingModified) {
+							_, err := r.db.Exec(`UPDATE activities SET value = $2, is_deleted = $3, modified_at = NOW() WHERE id = $1`, existingID, val, a.DeletedAt != nil)
+							if err != nil {
+								return nil, err
+							}
+							resp.Applied++
+						} else {
+							resp.Conflicts = append(resp.Conflicts, types.Conflict{Resource: "activity", ID: existingID, Reason: "server-newer"})
+						}
+					}
+				}
 			}
 		}
 	}
