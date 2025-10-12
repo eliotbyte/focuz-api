@@ -95,6 +95,8 @@ func (h *NotesHandler) Register(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, err.Error()))
 		return
 	}
+	// Convert username to lowercase for case-insensitive handling
+	req.Username = strings.ToLower(req.Username)
 	if len(req.Username) < 3 || len(req.Username) > 50 {
 		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, "Username must be between 3 and 50 characters"))
 		return
@@ -126,6 +128,8 @@ func (h *NotesHandler) Login(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, err.Error()))
 		return
 	}
+	// Convert username to lowercase for case-insensitive handling
+	req.Username = strings.ToLower(req.Username)
 	user, err := h.repo.GetUserByUsername(req.Username)
 	if err != nil || user == nil {
 		c.JSON(http.StatusUnauthorized, types.NewErrorResponse(types.ErrorCodeUnauthorized, "Invalid username or password"))

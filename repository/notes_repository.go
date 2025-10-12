@@ -27,12 +27,14 @@ func (r *NotesRepository) CreateUser(username, password string) (*models.User, e
 	if err != nil {
 		return nil, err
 	}
+	// Convert username to lowercase for case-insensitive storage
+	lowercaseUsername := strings.ToLower(username)
 	var user models.User
 	err = r.db.QueryRow(`
 		INSERT INTO users (username, password_hash)
 		VALUES ($1, $2)
 		RETURNING id, username, created_at
-	`, username, string(hash)).Scan(&user.ID, &user.Username, &user.CreatedAt)
+	`, lowercaseUsername, string(hash)).Scan(&user.ID, &user.Username, &user.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -41,11 +43,13 @@ func (r *NotesRepository) CreateUser(username, password string) (*models.User, e
 
 func (r *NotesRepository) GetUserByUsername(username string) (*models.User, error) {
 	var user models.User
+	// Convert username to lowercase for case-insensitive search
+	lowercaseUsername := strings.ToLower(username)
 	err := r.db.QueryRow(`
 		SELECT id, username, password_hash, created_at
 		FROM users
 		WHERE username = $1
-	`, username).Scan(&user.ID, &user.Username, &user.PasswordHash, &user.CreatedAt)
+	`, lowercaseUsername).Scan(&user.ID, &user.Username, &user.PasswordHash, &user.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
