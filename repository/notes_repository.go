@@ -282,11 +282,6 @@ func (r *NotesRepository) GetNotes(userID, spaceID int, filters models.NoteFilte
 	} else if filters.NotReply {
 		conditions = append(conditions, "n.parent_id IS NULL")
 	}
-	if filters.SearchQuery != nil && *filters.SearchQuery != "" {
-		conditions = append(conditions, "n.text &@ $"+strconv.Itoa(idx))
-		params = append(params, *filters.SearchQuery)
-		idx++
-	}
 
 	// Add date filters
 	if filters.DateFrom != nil {

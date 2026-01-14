@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"focuz-api/globals"
+	"focuz-api/pkg/appenv"
 	"focuz-api/repository"
 	"focuz-api/types"
 	"net/http"
@@ -12,7 +13,6 @@ import (
 	"focuz-api/models"
 
 	"log/slog"
-	"os"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -75,7 +75,7 @@ func AuthMiddleware(secret string) gin.HandlerFunc {
 		}
 
 		// Structured logging with PII guard: do not log userId in production
-		if strings.ToLower(os.Getenv("APP_ENV")) != "production" {
+		if !appenv.IsProduction() {
 			slog.Info("auth request", "path", c.Request.URL.Path, "userId", int(userID))
 		} else {
 			slog.Info("auth request", "path", c.Request.URL.Path)
@@ -323,10 +323,10 @@ func (h *NotesHandler) GetNotes(c *gin.Context) {
 	if strings.ToLower(notReplyParam) == "true" {
 		notReply = true
 	}
-	searchQuery := c.Query("search")
-	var searchQueryPtr *string
-	if searchQuery != "" {
-		searchQueryPtr = &searchQuery
+	// Note search is client-side (local-first). Server-side word search was removed for portability.
+	if strings.TrimSpace(c.Query("search")) != "" {
+		c.JSON(http.StatusBadRequest, types.NewErrorResponse(types.ErrorCodeValidation, "search is not supported on this endpoint; use client-side search"))
+		return
 	}
 	parentIDParam := c.Query("parentId")
 	var parentID *int
@@ -379,7 +379,6 @@ func (h *NotesHandler) GetNotes(c *gin.Context) {
 		NotReply:    notReply,
 		Page:        pagination.Page,
 		PageSize:    pagination.PageSize,
-		SearchQuery: searchQueryPtr,
 		ParentID:    parentID,
 		SortField:   sortField,
 		SortOrder:   sortOrder,

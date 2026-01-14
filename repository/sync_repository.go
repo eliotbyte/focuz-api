@@ -46,7 +46,7 @@ func (r *SyncRepository) GetChangesSince(userID int, accessibleSpaceIDs []int, s
 	}
 	rows.Close()
 
-	// Notes (include deleted). Include nested activities and attachments (with RFC3339 timestamps) for each note.
+	// Notes (include deleted). Include nested activities, charts and attachments (with RFC3339 timestamps) for each note.
 	noteRows, err := r.db.Query(`
         SELECT n.id, n.user_id, n.space_id, n.text, n.date, n.parent_id, n.created_at, n.modified_at, n.is_deleted,
           COALESCE((SELECT ARRAY_AGG(t.name ORDER BY t.name)
@@ -65,6 +65,23 @@ func (r *SyncRepository) GetChangesSince(userID int, accessibleSpaceIDs []int, s
           ), '[]'::json) AS activities,
           COALESCE((
             SELECT json_agg(json_build_object(
+              'id', c.id,
+              'user_id', c.user_id,
+              'space_id', c.space_id,
+              'kind_id', c.kind,
+              'activity_type_id', c.activity_type_id,
+              'period_id', c.period,
+              'name', c.name,
+              'description', c.description,
+              'note_id', c.note_id,
+              'created_at', to_char(c.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+              'modified_at', to_char(c.modified_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+              'deleted_at', CASE WHEN c.is_deleted THEN to_char(c.modified_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') ELSE NULL END
+            ) ORDER BY c.modified_at ASC, c.id ASC)
+            FROM chart c WHERE c.note_id = n.id
+          ), '[]'::json) AS charts,
+          COALESCE((
+            SELECT json_agg(json_build_object(
               'id', att.id,
               'file_name', att.file_name,
               'file_type', att.file_type,
@@ -79,6 +96,7 @@ func (r *SyncRepository) GetChangesSince(userID int, accessibleSpaceIDs []int, s
         AND (
           n.modified_at > $2 OR
           EXISTS (SELECT 1 FROM activities a WHERE a.note_id = n.id AND a.modified_at > $2) OR
+          EXISTS (SELECT 1 FROM chart c WHERE c.note_id = n.id AND c.modified_at > $2) OR
           EXISTS (SELECT 1 FROM attachments att WHERE att.note_id = n.id AND att.modified_at > $2)
         )
         ORDER BY n.id
@@ -95,8 +113,9 @@ func (r *SyncRepository) GetChangesSince(userID int, accessibleSpaceIDs []int, s
 		var parentID sql.NullInt64
 		var tags []string
 		var activitiesJSON []byte
+		var chartsJSON []byte
 		var attachmentsJSON []byte
-		if err := noteRows.Scan(&id, &userIDRow, &spaceID, &text, &date, &parentID, &created, &modified, &isDeleted, pq.Array(&tags), &activitiesJSON, &attachmentsJSON); err != nil {
+		if err := noteRows.Scan(&id, &userIDRow, &spaceID, &text, &date, &parentID, &created, &modified, &isDeleted, pq.Array(&tags), &activitiesJSON, &chartsJSON, &attachmentsJSON); err != nil {
 			noteRows.Close()
 			return nil, err
 		}
@@ -134,6 +153,11 @@ func (r *SyncRepository) GetChangesSince(userID int, accessibleSpaceIDs []int, s
 			var atts []types.AttachmentChange
 			_ = json.Unmarshal(attachmentsJSON, &atts)
 			noteChange.Attachments = atts
+		}
+		if len(chartsJSON) > 0 {
+			var chs []types.ChartChange
+			_ = json.Unmarshal(chartsJSON, &chs)
+			noteChange.Charts = chs
 		}
 		resp.Notes = append(resp.Notes, noteChange)
 	}
@@ -200,29 +224,7 @@ func (r *SyncRepository) GetChangesSince(userID int, accessibleSpaceIDs []int, s
 	}
 	filterRows.Close()
 
-	// Charts
-	chartRows, err := r.db.Query(`
-		SELECT id, user_id, space_id, kind, activity_type_id, period, name, description, note_id, created_at, modified_at, is_deleted
-		FROM chart
-		WHERE space_id = ANY($1)
-		AND modified_at > $2
-	`, pq.Array(accessibleSpaceIDs), since)
-	if err != nil {
-		return nil, err
-	}
-	for chartRows.Next() {
-		var it types.ChartChange
-		var isDeleted bool
-		if err := chartRows.Scan(&it.ID, &it.UserID, &it.SpaceID, &it.KindID, &it.ActivityTypeID, &it.PeriodID, &it.Name, &it.Description, &it.NoteID, &it.CreatedAt, &it.ModifiedAt, &isDeleted); err != nil {
-			chartRows.Close()
-			return nil, err
-		}
-		if isDeleted {
-			it.DeletedAt = &it.ModifiedAt
-		}
-		resp.Charts = append(resp.Charts, it)
-	}
-	chartRows.Close()
+	// Root-level charts removed from pull; charts are nested under notes now.
 
 	// Removed: root-level Activities and Attachments. They are now nested under notes.
 
@@ -342,6 +344,34 @@ func (r *SyncRepository) ApplyChanges(userID int, payload types.SyncPushRequest)
 					}
 				}
 			}
+			// Apply nested charts (LWW per chart id, same-note only)
+			if len(n.Charts) > 0 {
+				for _, ch := range n.Charts {
+					if ch.ID == 0 {
+						continue
+					}
+					var currentNoteID int
+					var currentModified time.Time
+					err := r.db.QueryRow(`SELECT note_id, modified_at FROM chart WHERE id = $1`, ch.ID).Scan(&currentNoteID, &currentModified)
+					if err == sql.ErrNoRows {
+						continue
+					} else if err != nil {
+						return nil, err
+					}
+					if currentNoteID != newID {
+						continue
+					}
+					if ch.ModifiedAt.After(currentModified) {
+						_, err := r.db.Exec(`UPDATE chart SET name = $2, description = $3, kind = $4, period = $5, activity_type_id = $6, is_deleted = $7, modified_at = NOW() WHERE id = $1`, ch.ID, ch.Name, ch.Description, ch.KindID, ch.PeriodID, ch.ActivityTypeID, ch.DeletedAt != nil)
+						if err != nil {
+							return nil, err
+						}
+						resp.Applied++
+					} else {
+						resp.Conflicts = append(resp.Conflicts, types.Conflict{Resource: "chart", ID: ch.ID, Reason: "server-newer"})
+					}
+				}
+			}
 			resp.Applied++
 			if n.ClientID != nil {
 				resp.Mappings = append(resp.Mappings, types.Mapping{Resource: "note", ClientID: *n.ClientID, ServerID: newID})
@@ -440,6 +470,34 @@ func (r *SyncRepository) ApplyChanges(userID int, payload types.SyncPushRequest)
 						} else {
 							resp.Conflicts = append(resp.Conflicts, types.Conflict{Resource: "activity", ID: existingID, Reason: "server-newer"})
 						}
+					}
+				}
+			}
+			// Apply nested charts for this note (LWW per chart id, same-note only)
+			if len(n.Charts) > 0 {
+				for _, ch := range n.Charts {
+					if ch.ID == 0 {
+						continue
+					}
+					var currentNoteID int
+					var currentModified time.Time
+					err := r.db.QueryRow(`SELECT note_id, modified_at FROM chart WHERE id = $1`, ch.ID).Scan(&currentNoteID, &currentModified)
+					if err == sql.ErrNoRows {
+						continue
+					} else if err != nil {
+						return nil, err
+					}
+					if currentNoteID != *n.ID {
+						continue
+					}
+					if ch.ModifiedAt.After(currentModified) {
+						_, err := r.db.Exec(`UPDATE chart SET name = $2, description = $3, kind = $4, period = $5, activity_type_id = $6, is_deleted = $7, modified_at = NOW() WHERE id = $1`, ch.ID, ch.Name, ch.Description, ch.KindID, ch.PeriodID, ch.ActivityTypeID, ch.DeletedAt != nil)
+						if err != nil {
+							return nil, err
+						}
+						resp.Applied++
+					} else {
+						resp.Conflicts = append(resp.Conflicts, types.Conflict{Resource: "chart", ID: ch.ID, Reason: "server-newer"})
 					}
 				}
 			}
@@ -553,6 +611,34 @@ func (r *SyncRepository) ApplyChanges(userID int, payload types.SyncPushRequest)
 						} else {
 							resp.Conflicts = append(resp.Conflicts, types.Conflict{Resource: "activity", ID: existingID, Reason: "server-newer"})
 						}
+					}
+				}
+			}
+			// Also apply nested charts independently (LWW per chart id, same-note only)
+			if len(n.Charts) > 0 {
+				for _, ch := range n.Charts {
+					if ch.ID == 0 {
+						continue
+					}
+					var currentNoteID int
+					var currentModified time.Time
+					err := r.db.QueryRow(`SELECT note_id, modified_at FROM chart WHERE id = $1`, ch.ID).Scan(&currentNoteID, &currentModified)
+					if err == sql.ErrNoRows {
+						continue
+					} else if err != nil {
+						return nil, err
+					}
+					if currentNoteID != *n.ID {
+						continue
+					}
+					if ch.ModifiedAt.After(currentModified) {
+						_, err := r.db.Exec(`UPDATE chart SET name = $2, description = $3, kind = $4, period = $5, activity_type_id = $6, is_deleted = $7, modified_at = NOW() WHERE id = $1`, ch.ID, ch.Name, ch.Description, ch.KindID, ch.PeriodID, ch.ActivityTypeID, ch.DeletedAt != nil)
+						if err != nil {
+							return nil, err
+						}
+						resp.Applied++
+					} else {
+						resp.Conflicts = append(resp.Conflicts, types.Conflict{Resource: "chart", ID: ch.ID, Reason: "server-newer"})
 					}
 				}
 			}

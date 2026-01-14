@@ -5,6 +5,8 @@ import (
 	"os"
 	"strings"
 
+	"focuz-api/pkg/appenv"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -14,7 +16,7 @@ import (
 //     only if it is present in the comma-separated ALLOWED_ORIGINS env var.
 //     Optionally sets Access-Control-Allow-Credentials when ALLOW_CREDENTIALS=true.
 func CORSMiddleware() gin.HandlerFunc {
-	isProd := strings.EqualFold(os.Getenv("APP_ENV"), "production") || gin.Mode() == gin.ReleaseMode
+	isProd := appenv.IsProduction() || gin.Mode() == gin.ReleaseMode
 
 	allowedOriginsEnv := os.Getenv("ALLOWED_ORIGINS")
 	var allowedOrigins map[string]struct{}

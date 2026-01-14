@@ -8,7 +8,6 @@ type SyncPullResponse struct {
 	Notes         []NoteChange         `json:"notes"`
 	Tags          []TagChange          `json:"tags"`
 	Filters       []FilterChange       `json:"filters"`
-	Charts        []ChartChange        `json:"charts"`
 	ActivityTypes []ActivityTypeChange `json:"activityTypes"`
 }
 
@@ -35,6 +34,8 @@ type NoteChange struct {
 	// Activities and attachments are included for pull; for push, clients may include only id, file_name, modified_at, is_deleted for attachments
 	Activities  []ActivityChange   `json:"activities"`
 	Attachments []AttachmentChange `json:"attachments"`
+	// Charts are nested under the note (pull + push). Root-level charts in push are deprecated.
+	Charts []ChartChange `json:"charts"`
 }
 
 type TagChange struct {

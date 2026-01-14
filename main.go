@@ -5,11 +5,13 @@ import (
 	"focuz-api/handlers"
 	"focuz-api/initializers"
 	"focuz-api/middleware"
+	"focuz-api/pkg/appenv"
 	"focuz-api/pkg/notify"
 	"focuz-api/repository"
 	"focuz-api/websocket"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -131,10 +133,15 @@ func main() {
 	chartsHandler := handlers.NewChartsHandler(chartsRepo, spacesRepo, activityTypesRepo, notesRepo)
 	notificationsHandler := handlers.NewNotificationsHandler(notificationsRepo)
 	filtersHandler := handlers.NewFiltersHandler(filtersRepo, spacesRepo)
-	syncHandler := handlers.NewSyncHandler(syncRepo, spacesRepo, tagsRepo, filtersRepo).WithNotifier(notifier)
+	syncHandler := handlers.NewSyncHandler(syncRepo, spacesRepo, tagsRepo, filtersRepo).
+		WithNotifier(notifier).
+		WithLimits(
+			parseInt64Env("SYNC_MAX_BODY_BYTES", 25*1024*1024),
+			parseIntEnv("SYNC_MAX_BATCH_ITEMS", 10000),
+		)
 
 	// Set Gin to release mode in production
-	if os.Getenv("GIN_MODE") == "release" || strings.ToLower(os.Getenv("APP_ENV")) == "production" {
+	if os.Getenv("GIN_MODE") == "release" || appenv.IsProduction() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
@@ -209,4 +216,28 @@ func main() {
 	}
 
 	r.Run(":8080")
+}
+
+func parseIntEnv(name string, def int) int {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return def
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil || v <= 0 {
+		return def
+	}
+	return v
+}
+
+func parseInt64Env(name string, def int64) int64 {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return def
+	}
+	v, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || v <= 0 {
+		return def
+	}
+	return v
 }

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"focuz-api/pkg/appenv"
 	"focuz-api/types"
 
 	"github.com/gin-gonic/gin"
@@ -134,7 +135,7 @@ func isDisabled() bool {
 		return true
 	}
 	// Also disable automatically in tests
-	if strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV"))) == "test" {
+	if appenv.IsTest() {
 		return true
 	}
 	return false

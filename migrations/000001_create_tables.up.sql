@@ -1,5 +1,3 @@
-CREATE EXTENSION IF NOT EXISTS pgroonga;
-
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     username VARCHAR(50) UNIQUE NOT NULL CHECK (LENGTH(username) >= 3 AND LENGTH(username) <= 50),
@@ -56,7 +54,6 @@ CREATE TABLE note (
     space_id INTEGER NOT NULL REFERENCES space(id)
 );
 
-CREATE INDEX pgroonga_note_text_index ON note USING pgroonga (text);
 
 CREATE TABLE note_to_tag (
     id SERIAL PRIMARY KEY,
@@ -101,11 +98,13 @@ CREATE TABLE activities (
 CREATE TABLE attachments (
     id VARCHAR(36) PRIMARY KEY,
     note_id INTEGER NOT NULL REFERENCES note(id),
+    client_id VARCHAR(36),
     file_name VARCHAR(255) NOT NULL,
     file_type VARCHAR(100) NOT NULL,
     file_size BIGINT NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    modified_at TIMESTAMP NOT NULL DEFAULT NOW()
+    modified_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    UNIQUE (note_id, client_id)
 );
 
 CREATE TABLE chart (

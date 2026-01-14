@@ -43,7 +43,6 @@ type NoteFilters struct {
 	NotReply    bool       `json:"notReply"`
 	Page        int        `json:"page"`
 	PageSize    int        `json:"pageSize"`
-	SearchQuery *string    `json:"searchQuery"`
 	ParentID    *int       `json:"parentId"`
 	SortField   string     `json:"sortField"`
 	SortOrder   string     `json:"sortOrder"`

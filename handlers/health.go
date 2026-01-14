@@ -4,6 +4,9 @@ import (
 	"net/http"
 	"time"
 
+	"focuz-api/pkg/appenv"
+	"focuz-api/pkg/buildinfo"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -11,8 +14,9 @@ import (
 // It is intentionally lightweight and unauthenticated.
 func HealthCheck(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
-		"status":    "ok",
-		"timestamp": time.Now().UTC().Format(time.RFC3339),
-		"version":   "1.0.0",
+		"status":      "ok",
+		"timestamp":   time.Now().UTC().Format(time.RFC3339),
+		"version":     buildinfo.Version,
+		"environment": string(appenv.Current()),
 	})
 }

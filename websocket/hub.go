@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"focuz-api/pkg/appenv"
+
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
@@ -88,7 +90,7 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: 1024,
 	// In production, only allow origins explicitly listed in ALLOWED_ORIGINS (comma-separated).
 	CheckOrigin: func(r *http.Request) bool {
-		if strings.EqualFold(os.Getenv("APP_ENV"), "production") || gin.Mode() == gin.ReleaseMode {
+		if appenv.IsProduction() || gin.Mode() == gin.ReleaseMode {
 			allowed := map[string]struct{}{}
 			for _, o := range strings.Split(os.Getenv("ALLOWED_ORIGINS"), ",") {
 				origin := strings.TrimSpace(o)

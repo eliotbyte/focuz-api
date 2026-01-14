@@ -247,7 +247,8 @@ func (s *E2ETestSuite) Test35_GetNotesWithSearchAndFilters() {
 	resp, err := client.Do(req)
 	s.NoError(err)
 	defer resp.Body.Close()
-	s.Equal(http.StatusOK, resp.StatusCode)
+	// Server-side word search was removed (local-first client search).
+	s.Equal(http.StatusBadRequest, resp.StatusCode)
 }
 
 func (s *E2ETestSuite) Test36_GetNotesWithParentFilter() {
@@ -269,7 +270,8 @@ func (s *E2ETestSuite) Test37_GetNotesWithComplexFilters() {
 	resp, err := client.Do(req)
 	s.NoError(err)
 	defer resp.Body.Close()
-	s.Equal(http.StatusOK, resp.StatusCode)
+	// Server-side word search was removed (local-first client search).
+	s.Equal(http.StatusBadRequest, resp.StatusCode)
 }
 
 func (s *E2ETestSuite) Test65_TagFiltering_StrictIncludeAndExclude() {

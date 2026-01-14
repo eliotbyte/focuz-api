@@ -2,6 +2,9 @@
 
 Backend API for a note-taking application with workspaces, notes, charts, and activities.
 
+**Status**: alpha  
+**Version**: 0.1.0-alpha
+
 ## Quick Start
 
 1. Create a `.env` file in the project root:
@@ -134,7 +137,7 @@ Saved note filters with nested grouping and JSON parameters.
 - **Go 1.24** - main language
 - **Gin** - web framework
 - **PostgreSQL** - database
-- **pgroonga** - full-text search
+- **PostgreSQL FTS (GIN + tsvector)** - optional full-text index (portable, no extensions required)
 - **MinIO** - object storage
 - **JWT** - authentication
 - **Docker** - containerization
@@ -150,8 +153,6 @@ Saved note filters with nested grouping and JSON parameters.
 ### Local development
 ```bash
 # Start only the database and MinIO
-# IMPORTANT: the DB image includes PGroonga extension required by migrations
-# If you run Postgres yourself, ensure PGroonga is installed, or migrations will fail
 # Recommended:
  docker-compose up db minio -d
 
@@ -160,6 +161,9 @@ Saved note filters with nested grouping and JSON parameters.
 ```
 
 ### Environment notes
+- `APP_ENV`: application runtime environment. Supported values: `production` and `test`.
+  - In `test`, some protections/toggles are relaxed for faster test runs (e.g. rate limiting is disabled).
+  - `/health` includes the effective `environment` value.
 - `ALLOWED_ORIGINS`: comma-separated origins allowed in production for CORS and WebSocket (e.g. `https://app.example.com,https://staging.example.com`).
 - `TRUSTED_PROXIES`: comma-separated proxy CIDRs or IPs for correct client IP; defaults to `127.0.0.1, ::1` when unset.
 - `RATE_LIMIT_RPS`, `RATE_LIMIT_BURST`, `RATE_LIMIT_WHITELIST`, `RATE_LIMIT_ENABLED`: tune/disable rate limiting.
