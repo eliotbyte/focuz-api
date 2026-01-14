@@ -25,6 +25,7 @@ type MinioConfig struct {
 	FileTypes        []string
 	Expiry           time.Duration
 	ExternalEndpoint string
+	ExternalUseSSL   bool
 }
 
 var MinioClient *minio.Client
@@ -67,6 +68,22 @@ func InitMinio() error {
 		FileTypes:        parseFileTypes(os.Getenv("ALLOWED_FILE_TYPES")),
 		Expiry:           parseExpiry(os.Getenv("PRESIGNED_URL_EXPIRY")),
 		ExternalEndpoint: os.Getenv("MINIO_EXTERNAL_ENDPOINT"),
+		// ExternalUseSSL controls the scheme for presigned URLs when using an external MinIO endpoint.
+		// If MINIO_EXTERNAL_USE_SSL is unset, we try to infer it from MINIO_EXTERNAL_ENDPOINT scheme,
+		// otherwise we fallback to MINIO_USE_SSL.
+		ExternalUseSSL: func() bool {
+			raw := strings.TrimSpace(os.Getenv("MINIO_EXTERNAL_ENDPOINT"))
+			if v := strings.TrimSpace(os.Getenv("MINIO_EXTERNAL_USE_SSL")); v != "" {
+				return parseBool(v)
+			}
+			if strings.HasPrefix(raw, "https://") {
+				return true
+			}
+			if strings.HasPrefix(raw, "http://") {
+				return false
+			}
+			return parseBool(os.Getenv("MINIO_USE_SSL"))
+		}(),
 	}
 
 	// If YAML config exists, override upload-related settings
@@ -113,7 +130,7 @@ func InitMinio() error {
 	} else {
 		external, err := minio.New(extEndpoint, &minio.Options{
 			Creds:  credentials.NewStaticV4(Conf.AccessKey, Conf.SecretKey, ""),
-			Secure: Conf.UseSSL,
+			Secure: Conf.ExternalUseSSL,
 			Region: "us-east-1",
 		})
 		if err != nil {

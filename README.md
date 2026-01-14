@@ -14,6 +14,7 @@ POSTGRES_PASSWORD=focuz_password
 POSTGRES_DB=focuz_db
 JWT_SECRET=your_secret_key_here
 MINIO_EXTERNAL_ENDPOINT=http://localhost:9000
+MINIO_EXTERNAL_USE_SSL=false
 ```
 
 2. Start the project:
@@ -168,6 +169,7 @@ Saved note filters with nested grouping and JSON parameters.
 - `TRUSTED_PROXIES`: comma-separated proxy CIDRs or IPs for correct client IP; defaults to `127.0.0.1, ::1` when unset.
 - `RATE_LIMIT_RPS`, `RATE_LIMIT_BURST`, `RATE_LIMIT_WHITELIST`, `RATE_LIMIT_ENABLED`: tune/disable rate limiting.
 - `MINIO_EXTERNAL_ENDPOINT`: external hostname:port for presigned URLs; if empty, internal endpoint is used.
+- `MINIO_EXTERNAL_USE_SSL`: optional bool for presigned URL scheme when using `MINIO_EXTERNAL_ENDPOINT`. If unset, inferred from the endpoint scheme (`http://`/`https://`) or falls back to `MINIO_USE_SSL`.
 
 ## API Documentation
 
